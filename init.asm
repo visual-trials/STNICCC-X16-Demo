@@ -1713,7 +1713,7 @@ disable_sprites:
 
 init_text_screen:
 
-    ; By default layer 1 has a mapbase at $00000 and a tilebase at $0F800, 
+    ; By default layer 1 has a mapbase at $00000 and a tilebase at $1F000, 
     ; we now set the mapbase to $1E800 and move the tilebase to $1E000
     ;
     lda #($1E8>>1)
@@ -1722,16 +1722,16 @@ init_text_screen:
     lda #%00010000 ; 32 tiles high, 64 tiles wide, color depth = 0 (1 bpp)
     sta VERA_L1_config
     
-    ; Copy tilebase from $0F800 to $1E000 ($800 bytes)
+    ; Copy tilebase from $1F000 to $1E000 ($800 bytes)
 
     ; ADDRSEL = 1
     lda #1
     sta VERA_ctrl
     
-    ; Old = $0F800
-    lda #%00010000      ; setting bit 16 of vram address to the highest bit in the old tilebase (=0), setting auto-increment value to 1
+    ; Old = $1F000
+    lda #%00010001      ; setting bit 16 of vram address to the highest bit in the old tilebase (=1), setting auto-increment value to 1
     sta VERA_addr_bank
-    lda #$F8
+    lda #$F0
     sta VERA_addr_high
     lda #$00
     sta VERA_addr_low
