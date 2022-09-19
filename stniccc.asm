@@ -15,6 +15,7 @@ do_switch_buffer      = 1
 use_scanning_lines_table = 1
 use_new_scanning_lines_table = 0 ; this overrules use_scanning_lines_table! (but also REQUIRES use_scanning_lines_table!)
 use_new_division_table = 1
+; FIXME: we disabled audio loading and audio starting right now (see FIXMEs below), so for now keep this at 1
 audio_enabled         = 1
 
 ; TODO: implement v2 of the new scanning+horizontal draw method!! :):)
@@ -295,8 +296,9 @@ start:
     jsr load_audio_file
 
     ; Initially we load 4kb of audio (which is the size of the FIFO buffer)
-    jsr load_2k_of_new_audio
-    jsr load_2k_of_new_audio
+; FIXME
+;    jsr load_2k_of_new_audio
+;    jsr load_2k_of_new_audio
     
     jsr backup_default_irq_handler
     jsr enable_vsync_and_aflow_handler
@@ -312,7 +314,8 @@ start:
 .if(audio_enabled)
     ; Start audio playback
     lda #64    ; 64 = 24414 Hz sample rate 
-    sta VERA_audio_rate
+; FIXME
+;    sta VERA_audio_rate
 .endif
 
     ; ======== Setup for drawing intro text SLOWLY =====
