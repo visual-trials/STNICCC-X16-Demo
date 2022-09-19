@@ -1,5 +1,10 @@
 # STNICC demo (written for the Commander X16 in assembly)
 
+To generate files:
+
+   python file_splitter.py
+   python generate_intro_binaries.py
+
 To compile: (this assumes cc65 is installed)
 
     cl65 -t cx16 -o STNICCC.PRG stniccc.asm
