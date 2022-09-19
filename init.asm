@@ -1618,7 +1618,6 @@ addCodeByte:
     
 ; --- X16 constants ---    
     
-RAM_BANK        = $9F61
 SETLFS			= $FFBA
 SETNAM			= $FFBD
 LOAD			= $FFD5

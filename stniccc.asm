@@ -179,8 +179,10 @@ RENDER_HEIGHT     = 200
 
 ; ==================== Playback Stream ======================
 
-ZP_PTR_4                    = $26     ; Note: we use this, but always make a backup and restore that
-ZP_PTR_4_BACKUP:            .addr 0
+RAM_BANK =                   $00
+
+ZP_PTR_4 =                   $26     ; Note: we use this, but always make a backup and restore that
+ZP_PTR_4_BACKUP:             .addr 0
 
 division_address =           $66 ; word
 frame_address =              $68 ; word
