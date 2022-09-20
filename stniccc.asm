@@ -296,9 +296,8 @@ start:
     jsr load_audio_file
 
     ; Initially we load 4kb of audio (which is the size of the FIFO buffer)
-; FIXME
-;    jsr load_2k_of_new_audio
-;    jsr load_2k_of_new_audio
+    jsr load_2k_of_new_audio
+    jsr load_2k_of_new_audio
     
     jsr backup_default_irq_handler
     jsr enable_vsync_and_aflow_handler
@@ -314,8 +313,7 @@ start:
 .if(audio_enabled)
     ; Start audio playback
     lda #64    ; 64 = 24414 Hz sample rate 
-; FIXME
-;    sta VERA_audio_rate
+    sta VERA_audio_rate
 .endif
 
     ; ======== Setup for drawing intro text SLOWLY =====

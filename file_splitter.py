@@ -1,3 +1,5 @@
+import os
+
 def read_frame(sf_bytes, current_byte_index):
 
     frame_flags = sf_bytes[current_byte_index]
@@ -68,7 +70,15 @@ def read_frame(sf_bytes, current_byte_index):
 
 #    return current_byte_index
     
-
+def create_audio_directort_if_not_exists(file_number):
+    first_sub_dir = file_number // 256
+    second_sub_dir = (file_number - first_sub_dir*256) // 16
+    audio_directory = "AUDIO/" + '{:1X}'.format(first_sub_dir) + '/' + '{:1X}'.format(second_sub_dir) + '/'
+    if not os.path.exists(audio_directory):
+        os.makedirs(audio_directory)
+        
+    return audio_directory
+    
 def split_audio_file():
     sf = open("audio.raw", "rb")
     
@@ -88,9 +98,13 @@ def split_audio_file():
     while(len(sf_bytes) > end_byte_index):
         current_output_data = sf_bytes[current_byte_index:end_byte_index]
         
+        audio_directory = create_audio_directort_if_not_exists(file_number)
         # print ("file_number: " + str(file_number))
+        #print ("file_number: " + str(file_number))
+        #print ("audio_directory + file number: " + audio_directory+ '{:1X}'.format(file_number % 16))
         #print (current_output_data.hex(' '))
-        output_file = open("AUDIO/" + '{:03X}'.format(file_number) +  ".BIN", "wb")
+        #output_file = open("AUDIO/" + '{:03X}'.format(file_number) +  ".BIN", "wb")
+        output_file = open(audio_directory + '{:1X}'.format(file_number % 16) +  ".BIN", "wb")
         output_file.write(bytes(2) + current_output_data) # TODO: we add two bytes because the LOAD syscall in the x16 cuts them off
         output_file.close()
         
@@ -101,9 +115,11 @@ def split_audio_file():
     # FIXME: 
     # Storing the left-over part
     current_output_data = sf_bytes[current_byte_index:]
+    audio_directory = create_audio_directort_if_not_exists(file_number)
     # print ("file_number: " + str(file_number))
     # print (current_output_data.hex(' '))
-    output_file = open("AUDIO/" + '{:03X}'.format(file_number) +  ".BIN", "wb")
+    # output_file = open("AUDIO/" + '{:03X}'.format(file_number) +  ".BIN", "wb")
+    output_file = open(audio_directory + '{:1X}'.format(file_number % 16) +  ".BIN", "wb")
     output_file.write(bytes(2) + current_output_data) # TODO: we add two bytes because the LOAD syscall in the x16 cuts them off
     output_file.close()
     

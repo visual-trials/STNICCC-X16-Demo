@@ -168,7 +168,7 @@ load_2k_of_new_audio:
 
 audio_file_number:   .word 0
 ; FIXME: we need 3 digits!
-audio_filename:      .byte    "audio/000.bin"
+audio_filename:      .byte    "audio/0/0/0.bin"
 end_audio_filename:
 
 ; https://gist.github.com/JimmyDansbo/f955378ee4f1087c2c286fcd6956e223
@@ -206,12 +206,12 @@ set_audio_filename:
     bcs :+
     clc
     adc #48-0  ; = '0'
-    sta audio_filename+8
+    sta audio_filename+10
     bra :++
 :
     clc
     adc #65-10  ; = 'a'
-    sta audio_filename+8
+    sta audio_filename+10
 :
 
     lda audio_file_number
@@ -226,12 +226,12 @@ set_audio_filename:
     
     clc
     adc #48-0  ; = '0'
-    sta audio_filename+7
+    sta audio_filename+8
     bra :++
 :
     clc
     adc #65-10  ; = 'a'
-    sta audio_filename+7
+    sta audio_filename+8
 :
 
     ; The highest byte is never bigger than 2, so no need to check if its A to F
