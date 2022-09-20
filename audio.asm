@@ -167,7 +167,6 @@ load_2k_of_new_audio:
 ; ====================== LOAD AUDIO FILE ==============================
 
 audio_file_number:   .word 0
-; FIXME: we need 3 digits!
 audio_filename:      .byte    "audio/0/0/0.bin"
 end_audio_filename:
 
@@ -175,6 +174,7 @@ end_audio_filename:
 ; https://www.commanderx16.com/forum/index.php?/topic/80-loading-a-file-into-vram-assembly/
 ; https://www.commanderx16.com/forum/index.php?/topic/795-cc65-cbm_k_load-into-banked-ram/
 load_audio_file:
+
     jsr set_audio_filename
     
     ; TODO; what should the logical file number be?

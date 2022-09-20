@@ -227,11 +227,28 @@ done_retrieving_pixels_from_character:
 
 load_intro_files:
     
+    ; FIXME: the PROBLEM is that the load_audio_file is called during AFLOW interrupt. But this is done WHILE the 2bit (text) image is being loaded into VRAM!!
+    ; WORKAROUND for now is to disable interrupts during loading
+    sei
     jsr load_intro_text_file
+    cli
+    
+    sei
     jsr load_intro_logo_file
+    cli
+    
+    sei
     jsr load_intro_volume_file
+    cli
+    
+    sei
     jsr load_intro_zoom_file
+    cli
+    
+    sei
     jsr load_intro_palette_file
+    cli
+    
     jsr set_intro_palette_colors
     jsr setup_intro_sprites
     
