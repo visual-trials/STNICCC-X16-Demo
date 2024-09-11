@@ -233,7 +233,7 @@ def get_left_and_right_vertices(vertex_indices, screen_vertices):
             
     is_single_top = (len(top_vertex_indices) == 1)
 
-    return (left_vertices, right_vertices, top_y, bottom_y, is_single_top)
+    return (left_vertices, right_vertices, top_y, is_single_top)
     
     
 
@@ -246,7 +246,7 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, vertex_indices, screen_ve
     else:
         line_color = line_color_index
         
-    (left_vertices, right_vertices, top_y, bottom_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
+    (left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
     
     polygon_bytes = []
     
