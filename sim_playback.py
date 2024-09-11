@@ -146,11 +146,11 @@ def convert_increment_to_incr_components(increment):
 
 def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
 
-    print('---')
+    #print('---')
     tmp_vertices = []
     for vertex_index in vertex_indices:
         tmp_vertices.append(screen_vertices[vertex_index])
-    print(tmp_vertices)
+    #print(tmp_vertices)
     
     left_phase = 0
     left_vertices = []
@@ -177,7 +177,7 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
         if (top_y is None or vertex_y < top_y):
             top_y = vertex_y
         
-        print('F:'+str(first_screen_vertex)+" S:"+str(second_screen_vertex))
+        #print('F:'+str(first_screen_vertex)+" S:"+str(second_screen_vertex))
         
         if (first_screen_vertex[1] < second_screen_vertex[1]):
 # FIXME: better logic for this!
@@ -219,7 +219,7 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
     else:
         is_single_top = False
     
-    print('===')
+    #print('===')
 
     return (left_vertices, right_vertices, top_y, is_single_top)
     
@@ -325,9 +325,9 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
     else:
         line_color = line_color_index
         
-    print('-----------SIMPLE------------')
+    #print('-----------SIMPLE------------')
     (left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices_simple(vertex_indices, screen_vertices)
-    print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
+    #print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
     
     #print('-----------OLD------------')
     #(left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
