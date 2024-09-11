@@ -144,6 +144,74 @@ def convert_increment_to_incr_components(increment):
 
 
 
+def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
+
+    print('---')
+    tmp_vertices = []
+    for vertex_index in vertex_indices:
+        tmp_vertices.append(screen_vertices[vertex_index])
+    print(tmp_vertices)
+    
+    left_phase = 0
+    left_vertices = []
+    pre_left_vertices = []
+    
+    right_phase = 0
+    right_vertices = []
+    pre_right_vertices = []
+    
+    top_y = None
+    is_single_top = None
+    
+
+    for first_vertex_index_count, first_vertex_index in enumerate(vertex_indices):
+        first_screen_vertex = screen_vertices[first_vertex_index]
+        
+        second_vertex_index_count = first_vertex_index_count+1
+        if (second_vertex_index_count >= len(vertex_indices)):
+            second_vertex_index_count = 0
+        
+        second_vertex_index = vertex_indices[second_vertex_index_count]
+        second_screen_vertex = screen_vertices[second_vertex_index]
+        
+        print('F:'+str(first_screen_vertex)+" S:"+str(second_screen_vertex))
+        
+        if (first_screen_vertex[1] < second_screen_vertex[1]):
+# FIXME: better logic for this!
+            if (left_phase == 0):
+                left_vertices.append(first_screen_vertex)
+                left_phase += 1
+                if (right_phase == 1):
+                    right_phase = 2
+            if (left_phase == 1):
+                left_vertices.append(second_screen_vertex)
+            else:
+                pre_left_vertices.append(first_screen_vertex)
+        elif (first_screen_vertex[1] > second_screen_vertex[1]):
+# FIXME: better logic for this!
+            if (right_phase == 0):
+                right_vertices.append(first_screen_vertex)
+                right_phase += 1
+                if (left_phase == 1):
+                    left_phase = 2
+            if (right_phase == 1):
+                right_vertices.append(second_screen_vertex)
+            else:
+                pre_right_vertices.append(first_screen_vertex)
+        else:
+# FIXME!
+            pass
+        
+        #first_vertex_y = screen_vertex[1]
+        
+    left_vertices = pre_left_vertices + left_vertices
+    right_vertices = pre_right_vertices + right_vertices
+    
+    print('===')
+
+# FIXME: always reversed here?
+    return (left_vertices, list(reversed(right_vertices)), top_y, is_single_top)
+    
 def get_left_and_right_vertices(vertex_indices, screen_vertices):
 
     # == Setup left and right lists ==
@@ -237,7 +305,7 @@ def get_left_and_right_vertices(vertex_indices, screen_vertices):
     
     
 
-def fx_sim_draw_polygon(draw_buffer, line_color_index, vertex_indices, screen_vertices, polygon_type_stats, colors):
+def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_indices, screen_vertices, polygon_type_stats, colors):
 
     # FIXME: this is a bit of an ugly workaround!
     line_color = None
@@ -246,7 +314,13 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, vertex_indices, screen_ve
     else:
         line_color = line_color_index
         
+    print('-----------SIMPLE------------')
+    (left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices_simple(vertex_indices, screen_vertices)
+    print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices))
+    
+    print('-----------OLD------------')
     (left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
+    print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices))
     
     polygon_bytes = []
     
@@ -668,7 +742,8 @@ def parse_scene_file():
 
 screen_width = 256
 screen_height = 200
-scale = 3
+# FIXME: scale up using a canvas!
+scale = 1
 
 
 background_color = (0,0,0)
@@ -692,6 +767,13 @@ def run():
     increment_frame_by = 1
         
     frame_nr = 0
+
+# FIXME!
+# FIXME!
+# FIXME!
+    frame_nr = 80
+    increment_frame_by = 0
+
     
     screen.fill(background_color)
     
@@ -736,14 +818,14 @@ def run():
         frame_data = frames[frame_nr]
         
         polygons = frame_data['polygons'] 
-
+        
         if (frame_data['clear_screen']):
             screen.fill(background_color)
         
     # FIXME: do we need to this this for each frame?
         reset_fx_state(fx_state)
         
-        for polygon in polygons:
+        for polygon_index, polygon in enumerate(polygons):
             #print(polygon)
             polygon_vertices = polygon['polygon_vertices']
             color_index = polygon['color_index']
@@ -753,7 +835,7 @@ def run():
             scaled_polygon_vertices = [(polygon_vertices[i][0]*scale, polygon_vertices[i][1]*scale) for i in range(len(polygon_vertices))]
             polygon_vertex_indices = list(range(len(scaled_polygon_vertices)))
             if (USE_FX_POLY_FILLER_SIM):
-                fx_sim_draw_polygon(screen, color, polygon_vertex_indices, scaled_polygon_vertices, {}, None)
+                fx_sim_draw_polygon(screen, color, polygon_index, polygon_vertex_indices, scaled_polygon_vertices, {}, None)
             else:
                 pygame.draw.polygon(screen, color, scaled_polygon_vertices, 0)
 
