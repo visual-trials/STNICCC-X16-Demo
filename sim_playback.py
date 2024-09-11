@@ -266,7 +266,8 @@ def run():
             #if (USE_FX_POLY_FILLER_SIM):
                 # fx_sim_draw_polygon(screen, color, face['vertex_indices'], screen_vertices, {}, None)
             #else:
-            pygame.draw.polygon(screen, color, polygon_vertices, 0)
+            scaled_polygon_vertices = [(polygon_vertices[i][0]*scale, polygon_vertices[i][1]*scale) for i in range(len(polygon_vertices))]
+            pygame.draw.polygon(screen, color, scaled_polygon_vertices, 0)
 
         pygame.display.update()
         
