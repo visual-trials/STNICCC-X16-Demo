@@ -204,7 +204,7 @@ def parse_scene_file():
 
 screen_width = 256
 screen_height = 200
-scale = 2
+scale = 3
 
 
 background_color = (0,0,0)
