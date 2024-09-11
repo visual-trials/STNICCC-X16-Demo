@@ -143,16 +143,8 @@ def convert_increment_to_incr_components(increment):
     return (incr_less_accurate, incr_packed_low, incr_packed_high)
 
 
-def fx_sim_draw_polygon(draw_buffer, line_color_index, vertex_indices, screen_vertices, polygon_type_stats, colors):
 
-    # FIXME: this is a bit of an ugly workaround!
-    line_color = None
-    if (colors is not None):
-        line_color = colors[line_color_index]
-    else:
-        line_color = line_color_index
-        
-    polygon_bytes = []
+def get_left_and_right_vertices(vertex_indices, screen_vertices):
 
     # == Setup left and right lists ==
     # - Get top vertex (index)
@@ -238,7 +230,25 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, vertex_indices, screen_ve
         # We keep adding vertices until we reach the (first) bottom vertex
         if (vertex_index in bottom_vertex_indices):
             break
+            
+    is_single_top = (len(top_vertex_indices) == 1)
+
+    return (left_vertices, right_vertices, top_y, bottom_y, is_single_top)
     
+    
+
+def fx_sim_draw_polygon(draw_buffer, line_color_index, vertex_indices, screen_vertices, polygon_type_stats, colors):
+
+    # FIXME: this is a bit of an ugly workaround!
+    line_color = None
+    if (colors is not None):
+        line_color = colors[line_color_index]
+    else:
+        line_color = line_color_index
+        
+    (left_vertices, right_vertices, top_y, bottom_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
+    
+    polygon_bytes = []
     
     # == Drawing algo ==
     #  - Set x1 and x2 according to first in left/right list (NOTE: if the same we only have to export ONE in the data!)
@@ -281,7 +291,7 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, vertex_indices, screen_ve
     fx_state['x2_pos'] = int(right_pos) * 512 + 256
     
     polygon_type_identifier = ''
-    if (len(top_vertex_indices) == 1):
+    if (is_single_top):
         polygon_type_identifier += 'SINGLE_TOP'
         
 # FIXME: for now we are ONLY doing free form types!
