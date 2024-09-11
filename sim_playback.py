@@ -58,6 +58,7 @@ def read_frame(frame_index, sf_bytes, current_byte_index):
         
         while (color_and_nr_of_vertices != 255 and color_and_nr_of_vertices != 254 and color_and_nr_of_vertices != 253):
             nr_of_vertices = color_and_nr_of_vertices & 15
+            nr_of_polygons += 1
             current_byte_index += nr_of_vertices # one vertex-index per vertex
             
             color_and_nr_of_vertices = sf_bytes[current_byte_index]
@@ -72,12 +73,13 @@ def read_frame(frame_index, sf_bytes, current_byte_index):
         
         while (color_and_nr_of_vertices != 255 and color_and_nr_of_vertices != 254 and color_and_nr_of_vertices != 253):
             nr_of_vertices = color_and_nr_of_vertices & 15
+            nr_of_polygons += 1
             current_byte_index += nr_of_vertices * 2 # x and y per vertex
             
             color_and_nr_of_vertices = sf_bytes[current_byte_index]
             current_byte_index += 1
             
-    print('{0:4.0f} '.format(frame_index)+ clear_screen_str + contains_palette_str + is_indexed_frame_str + " : "+str(nr_of_vertices))
+    print('{0:4.0f} '.format(frame_index)+ clear_screen_str + contains_palette_str + is_indexed_frame_str + " : "+str(nr_of_polygons))
     
     return current_byte_index, color_and_nr_of_vertices
     
