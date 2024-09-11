@@ -162,7 +162,6 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
     
     top_y = None
     is_single_top = None
-    
 
     for first_vertex_index_count, first_vertex_index in enumerate(vertex_indices):
         first_screen_vertex = screen_vertices[first_vertex_index]
@@ -173,6 +172,10 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
         
         second_vertex_index = vertex_indices[second_vertex_index_count]
         second_screen_vertex = screen_vertices[second_vertex_index]
+
+        vertex_y = first_screen_vertex[1]        
+        if (top_y is None or vertex_y < top_y):
+            top_y = vertex_y
         
         print('F:'+str(first_screen_vertex)+" S:"+str(second_screen_vertex))
         
@@ -207,10 +210,18 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
     left_vertices = pre_left_vertices + left_vertices
     right_vertices = pre_right_vertices + right_vertices
     
+# FIXME: always reversed here?
+    right_vertices = list(reversed(right_vertices))
+    
+# FIXME: is this correct?
+    if (left_vertices[0][0] == right_vertices[0][0] and left_vertices[0][1] == right_vertices[0][1]):
+        is_single_top = True
+    else:
+        is_single_top = False
+    
     print('===')
 
-# FIXME: always reversed here?
-    return (left_vertices, list(reversed(right_vertices)), top_y, is_single_top)
+    return (left_vertices, right_vertices, top_y, is_single_top)
     
 def get_left_and_right_vertices(vertex_indices, screen_vertices):
 
@@ -316,11 +327,11 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
         
     print('-----------SIMPLE------------')
     (left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices_simple(vertex_indices, screen_vertices)
-    print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices))
+    print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
     
-    print('-----------OLD------------')
-    (left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
-    print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices))
+    #print('-----------OLD------------')
+    #(left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
+    #print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
     
     polygon_bytes = []
     
