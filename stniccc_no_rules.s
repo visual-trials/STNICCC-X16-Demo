@@ -218,10 +218,9 @@ draw_all_frames:
 
 ; FIXME: HARDCODED!
 ; FIXME when the 16-bit number goes negative we have detect the end, BUT this means the NR_OF_FRAMES should be initially filled with nr_of_frames-1 !
-; FIXME: shoulnt this be 1030?
-    lda #<(1800)
+    lda #<(1801)
     sta NR_OF_FRAMES
-    lda #>(1800)
+    lda #>(1801)
     sta NR_OF_FRAMES+1
 
 ; FIXME: replace this with something proper!
@@ -1483,11 +1482,6 @@ end_of_palette_data:
 ; This is just a dumb verison of a proper vsync-wait
 dumb_wait_for_vsync_and_three_frames:
 
-; FIXME!
-; FIXME!
-; FIXME!
-    rts
-
     ; We wait until SCANLINE == $1FF (indicating the beam is off screen, lines 512-524)
 wait_for_scanline_bit8:
     lda VERA_IEN
@@ -1498,6 +1492,12 @@ wait_for_scanline_low:
     lda VERA_SCANLINE_L
     cmp #$FF
     bne wait_for_scanline_low
+       
+; FIXME!
+; FIXME!
+; FIXME!
+    bra reset_frame_counter
+       
        
 wait_until_three_frames_have_passed:
     ; We should be (just) past the VSYNC-IRQ now, so the vsync counter is not going to increment any time soon. We read it and wait until its 3. When it is we reset it and move on.
