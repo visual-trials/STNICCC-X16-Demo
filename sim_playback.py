@@ -5,6 +5,8 @@ import os
 USE_FX_POLY_FILLER_SIM = True
 ALLOW_PAUSING_AND_REVERSE_PLAYBACK = True
 
+polygon_data_file = 'STNICCC-POLYGONS.DAT'
+
 
 # Quick and dirty (debug) colors here (somewhat akin to VERA's first 16 colors0
 BLACK = (0, 0, 0)
@@ -808,11 +810,15 @@ def run():
         
     frame_nr = 0
 
+
+    all_frame_bytes = []
+    bank_bytes = []
+
 # FIXME!
 # FIXME!
 # FIXME!
-    frame_nr = 125
-    increment_frame_by = 0
+    #frame_nr = 125
+    #increment_frame_by = 0
 
     
     screen.fill(background_color)
@@ -865,6 +871,9 @@ def run():
     # FIXME: do we need to this this for each frame?
         reset_fx_state(fx_state)
         
+        frame_bytes = []
+        nr_of_polygons_in_frame = 0
+        
         for polygon_index, polygon in enumerate(polygons):
             #print(polygon)
             polygon_vertices = polygon['polygon_vertices']
@@ -875,11 +884,32 @@ def run():
             scaled_polygon_vertices = [(polygon_vertices[i][0]*scale, polygon_vertices[i][1]*scale) for i in range(len(polygon_vertices))]
             polygon_vertex_indices = list(range(len(scaled_polygon_vertices)))
             if (USE_FX_POLY_FILLER_SIM):
-                fx_sim_draw_polygon(screen, color, polygon_index, polygon_vertex_indices, scaled_polygon_vertices, {}, None)
+                
+                polygon_bytes = fx_sim_draw_polygon(screen, color_index, polygon_index, polygon_vertex_indices, scaled_polygon_vertices, {}, debug_colors)
+                if polygon_bytes is None:
+                    pass
+                    #print(face)
+                else:
+                    nr_of_polygons_in_frame += 1
+                    frame_bytes += polygon_bytes
+                
             else:
                 pygame.draw.polygon(screen, color, scaled_polygon_vertices, 0)
 
         pygame.display.update()
+        
+        # We add the number actual drawn polygons to the beginning of the frame_bytes
+        frame_bytes.insert(0, nr_of_polygons_in_frame)
+        
+        if (len(bank_bytes) + len(frame_bytes) >= 8192):
+            # We add a polygon count of 255 as a marker that we have to switch to the next RAM Bank
+            bank_bytes.append(255)
+            fill_ln = 8192 - len(bank_bytes)
+            all_frame_bytes += bank_bytes
+            all_frame_bytes += fill_ln * [0]
+            bank_bytes = []
+            
+        bank_bytes += frame_bytes
         
         frame_nr += increment_frame_by
         
@@ -894,7 +924,14 @@ def run():
         
 
         #time.sleep(0.01)
+        
+    # We add the left-over frame bytes
+    if (len(bank_bytes) > 0): 
+        all_frame_bytes += bank_bytes
    
+    polygonDataFile = open(polygon_data_file, "wb")
+    polygonDataFile.write(bytearray(all_frame_bytes))
+    polygonDataFile.close()
         
     pygame.quit()
 
