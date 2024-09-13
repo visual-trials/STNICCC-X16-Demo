@@ -8,6 +8,7 @@ ALLOW_PAUSING_AND_REVERSE_PLAYBACK = True
 
 # Quick and dirty (debug) colors here (somewhat akin to VERA's first 16 colors0
 BLACK = (0, 0, 0)
+GREY = (50, 50, 50)
 WHITE = (255, 255, 255)
 RED  = (255, 64, 64)
 CYAN = (64, 255, 255)
@@ -26,7 +27,7 @@ SKYBLUE = (224, 224, 255)
 LIGHTGRAY = (192, 192, 192)
 
 debug_colors = [
-    BLACK,
+    GREY, # BLACK,
     WHITE,
     RED,
     CYAN,
@@ -147,10 +148,6 @@ def convert_increment_to_incr_components(increment):
 def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
 
     #print('---')
-    tmp_vertices = []
-    for vertex_index in vertex_indices:
-        tmp_vertices.append(screen_vertices[vertex_index])
-    #print(tmp_vertices)
     
     left_phase = 0
     left_vertices = []
@@ -162,6 +159,9 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
     
     top_y = None
     is_single_top = None
+    is_valid = True
+    
+    phase = ''
 
     for first_vertex_index_count, first_vertex_index in enumerate(vertex_indices):
         first_screen_vertex = screen_vertices[first_vertex_index]
@@ -179,28 +179,47 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
         
         #print('F:'+str(first_screen_vertex)+" S:"+str(second_screen_vertex))
         
+        #print(phase)
         if (first_screen_vertex[1] < second_screen_vertex[1]):
 # FIXME: better logic for this!
-            if (left_phase == 0):
+            #if (left_phase == 0):
+            if (phase == '' or phase == 'right'):
                 left_vertices.append(first_screen_vertex)
-                left_phase += 1
-                if (right_phase == 1):
-                    right_phase = 2
-            if (left_phase == 1):
+                #left_phase += 1
+                #if (right_phase == 1):
+                #    right_phase = 2
+            #if (left_phase == 1):
+            if (phase == '' or phase == 'left' or phase == 'right' or phase == 'rightleft'):
                 left_vertices.append(second_screen_vertex)
-            else:
+            elif (phase == 'leftright' or phase == 'leftrightleft'):
                 pre_left_vertices.append(first_screen_vertex)
+            else:
+                is_valid = False
+                #print(phase)
+            
+            if (phase == '' or phase == 'right' or phase == 'leftright'):
+                phase += 'left'
+            
         elif (first_screen_vertex[1] > second_screen_vertex[1]):
 # FIXME: better logic for this!
-            if (right_phase == 0):
+            #if (right_phase == 0):
+            
+            if (phase == '' or phase == 'left'):
                 right_vertices.append(first_screen_vertex)
-                right_phase += 1
-                if (left_phase == 1):
-                    left_phase = 2
-            if (right_phase == 1):
+                #right_phase += 1
+                #if (left_phase == 1):
+                #    left_phase = 2
+            #if (right_phase == 1):
+            if (phase == '' or phase == 'right' or phase == 'left' or phase == 'leftright'):
                 right_vertices.append(second_screen_vertex)
-            else:
+            elif (phase == 'rightleft' or phase == 'rightleftright'):
                 pre_right_vertices.append(first_screen_vertex)
+            else:
+                is_valid = False
+                #print(phase)
+                
+            if (phase == '' or phase == 'left' or phase == 'rightleft'):
+                phase += 'right'
         else:
 # FIXME!
             pass
@@ -221,7 +240,7 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
     
     #print('===')
 
-    return (left_vertices, right_vertices, top_y, is_single_top)
+    return (left_vertices, right_vertices, top_y, is_single_top, is_valid)
     
 def get_left_and_right_vertices(vertex_indices, screen_vertices):
 
@@ -325,9 +344,18 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
     else:
         line_color = line_color_index
         
+                
+    tmp_vertices = []
+    for vertex_index in vertex_indices:
+        tmp_vertices.append(screen_vertices[vertex_index])
+
     #print('-----------SIMPLE------------')
-    (left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices_simple(vertex_indices, screen_vertices)
+    (left_vertices, right_vertices, top_y, is_single_top, is_valid) = get_left_and_right_vertices_simple(vertex_indices, screen_vertices)
     #print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
+    
+# FIXME: use a different polygon filler for non-convex shapes!
+    if not is_valid:
+        return None
     
     #print('-----------OLD------------')
     #(left_vertices, right_vertices, top_y, is_single_top) = get_left_and_right_vertices(vertex_indices, screen_vertices)
@@ -518,6 +546,8 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
             # -- Change *left* slope --
             current_left_index += 1
             
+#            print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
+#            print(tmp_vertices)
             next_left_vertex = left_vertices[current_left_index+1]
             current_left_vertex = left_vertices[current_left_index]
 
@@ -782,7 +812,7 @@ def run():
 # FIXME!
 # FIXME!
 # FIXME!
-    frame_nr = 80
+    frame_nr = 125
     increment_frame_by = 0
 
     
