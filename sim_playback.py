@@ -8,7 +8,6 @@ ALLOW_PAUSING_AND_REVERSE_PLAYBACK = True
 
 # Quick and dirty (debug) colors here (somewhat akin to VERA's first 16 colors0
 BLACK = (0, 0, 0)
-GREY = (50, 50, 50)
 WHITE = (255, 255, 255)
 RED  = (255, 64, 64)
 CYAN = (64, 255, 255)
@@ -27,7 +26,7 @@ SKYBLUE = (224, 224, 255)
 LIGHTGRAY = (192, 192, 192)
 
 debug_colors = [
-    GREY, # BLACK,
+    GRAY, # BLACK,
     WHITE,
     RED,
     CYAN,
@@ -546,8 +545,8 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
             # -- Change *left* slope --
             current_left_index += 1
             
-#            print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
-#            print(tmp_vertices)
+            #print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
+            #print(tmp_vertices)
             next_left_vertex = left_vertices[current_left_index+1]
             current_left_vertex = left_vertices[current_left_index]
 
