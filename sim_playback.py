@@ -27,6 +27,8 @@ LIME = (224, 255, 224)
 SKYBLUE = (224, 224, 255)
 LIGHTGRAY = (192, 192, 192)
 
+ERROR_COLOR = (255, 255, 0)
+
 debug_colors = [
     GRAY, # BLACK,
     WHITE,
@@ -45,9 +47,33 @@ debug_colors = [
     LIME,
     SKYBLUE,
     LIGHTGRAY,
+
+    ERROR_COLOR,  # index 16
 ]
 
+grey_colors = [
+    (  0,  0,   0),
+    ( 16, 16,  16),
+    ( 32, 32,  32),
+    ( 48, 48,  48),
+    ( 64, 64,  64),
+    ( 80, 80,  80),
+    ( 96, 96,  96),
+    (112,112, 112),
 
+    (128,128, 128),
+    (144,144, 144),
+    (160,160, 160),
+    (176,176, 176),
+    (192,192, 192),
+    (208,208, 208),
+    (224,224, 224),
+    (240,240, 240),
+
+    ERROR_COLOR,  # index 16
+]
+
+background_color_index = 0
 
 # =================== VERA FX SIM ===============
 
@@ -798,7 +824,9 @@ pygame.display.set_caption('X16 STNICCC sim')
 screen = pygame.display.set_mode((screen_width*scale, screen_height*scale))
 clock = pygame.time.Clock()
 
-frame_buffer = pygame.Surface((screen_width, screen_height))
+frame_buffer = pygame.Surface((screen_width, screen_height), depth = 8)
+# FIXME: which color palette to choose?
+frame_buffer.set_palette(grey_colors)
 
 fx_state = {}
 
@@ -870,7 +898,7 @@ def run():
         polygons = frame_data['polygons'] 
         
         if (frame_data['clear_screen']):
-            frame_buffer.fill(background_color)
+            frame_buffer.fill(background_color_index)
         
     # FIXME: do we need to this this for each frame?
         reset_fx_state(fx_state)
@@ -883,25 +911,24 @@ def run():
             polygon_vertices = polygon['polygon_vertices']
             color_index = polygon['color_index']
             
-            # FIXME!
-            color = debug_colors[color_index]
             unscaled_polygon_vertices = [(polygon_vertices[i][0], polygon_vertices[i][1]) for i in range(len(polygon_vertices))]
             polygon_vertex_indices = list(range(len(unscaled_polygon_vertices)))
             if (USE_FX_POLY_FILLER_SIM):
                 
-                polygon_bytes = fx_sim_draw_polygon(frame_buffer, color_index, polygon_index, polygon_vertex_indices, unscaled_polygon_vertices, {}, debug_colors)
+                polygon_bytes = fx_sim_draw_polygon(frame_buffer, color_index, polygon_index, polygon_vertex_indices, unscaled_polygon_vertices, {}, None)
                 if polygon_bytes is None:
-                    pass
-                    #print(face)
+                    # TODO: we are now drawing a ERROR-color polygon if it was rejected
+                    color_index = 16
+                    pygame.draw.polygon(frame_buffer, color_index, unscaled_polygon_vertices, 0)
                 else:
                     nr_of_polygons_in_frame += 1
                     frame_bytes += polygon_bytes
                 
             else:
-                pygame.draw.polygon(frame_buffer, color, unscaled_polygon_vertices, 0)
+                pygame.draw.polygon(frame_buffer, color_index, unscaled_polygon_vertices, 0)
 
 
-
+        # Blitting the frame_buffer to the (scaled) screen
         frame_buffer_on_screen_x = 0
         frame_buffer_on_screen_y = 0
         screen.fill((0,0,0))
