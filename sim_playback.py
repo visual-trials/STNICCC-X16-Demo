@@ -243,6 +243,7 @@ def get_left_and_right_vertices_simple(vertex_indices, screen_vertices):
 
     return (left_vertices, right_vertices, top_y, is_single_top, is_valid)
     
+'''
 def get_left_and_right_vertices(vertex_indices, screen_vertices):
 
     # == Setup left and right lists ==
@@ -333,7 +334,7 @@ def get_left_and_right_vertices(vertex_indices, screen_vertices):
     is_single_top = (len(top_vertex_indices) == 1)
 
     return (left_vertices, right_vertices, top_y, is_single_top)
-    
+'''    
     
 
 def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_indices, screen_vertices, polygon_type_stats, colors):
@@ -356,6 +357,7 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
     
 # FIXME: use a different polygon filler for non-convex shapes!
     if not is_valid:
+        #print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
         return None
     
     #print('-----------OLD------------')
@@ -476,6 +478,7 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
         polygon_bytes.append(nr_of_lines_to_draw)
 
         if (not draw_fx_polygon_part(fx_state, draw_buffer, line_color, current_y_position, nr_of_lines_to_draw)):
+            #print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
             print("ERROR: not adding polygon to polygon stream since it encountered an error during drawing!")
 # FIXME: can we fix/prevent this?
             return None
@@ -784,8 +787,7 @@ def parse_scene_file():
 
 screen_width = 256
 screen_height = 200
-# FIXME: scale up using a canvas!
-scale = 1
+scale = 3
 
 
 background_color = (0,0,0)
@@ -795,6 +797,8 @@ pygame.init()
 pygame.display.set_caption('X16 STNICCC sim')
 screen = pygame.display.set_mode((screen_width*scale, screen_height*scale))
 clock = pygame.time.Clock()
+
+frame_buffer = pygame.Surface((screen_width, screen_height))
 
 fx_state = {}
 
@@ -866,7 +870,7 @@ def run():
         polygons = frame_data['polygons'] 
         
         if (frame_data['clear_screen']):
-            screen.fill(background_color)
+            frame_buffer.fill(background_color)
         
     # FIXME: do we need to this this for each frame?
         reset_fx_state(fx_state)
@@ -881,11 +885,11 @@ def run():
             
             # FIXME!
             color = debug_colors[color_index]
-            scaled_polygon_vertices = [(polygon_vertices[i][0]*scale, polygon_vertices[i][1]*scale) for i in range(len(polygon_vertices))]
-            polygon_vertex_indices = list(range(len(scaled_polygon_vertices)))
+            unscaled_polygon_vertices = [(polygon_vertices[i][0], polygon_vertices[i][1]) for i in range(len(polygon_vertices))]
+            polygon_vertex_indices = list(range(len(unscaled_polygon_vertices)))
             if (USE_FX_POLY_FILLER_SIM):
                 
-                polygon_bytes = fx_sim_draw_polygon(screen, color_index, polygon_index, polygon_vertex_indices, scaled_polygon_vertices, {}, debug_colors)
+                polygon_bytes = fx_sim_draw_polygon(frame_buffer, color_index, polygon_index, polygon_vertex_indices, unscaled_polygon_vertices, {}, debug_colors)
                 if polygon_bytes is None:
                     pass
                     #print(face)
@@ -894,7 +898,15 @@ def run():
                     frame_bytes += polygon_bytes
                 
             else:
-                pygame.draw.polygon(screen, color, scaled_polygon_vertices, 0)
+                pygame.draw.polygon(frame_buffer, color, unscaled_polygon_vertices, 0)
+
+
+
+        frame_buffer_on_screen_x = 0
+        frame_buffer_on_screen_y = 0
+        screen.fill((0,0,0))
+        screen.blit(pygame.transform.scale(frame_buffer, (screen_width*scale, screen_height*scale)), (frame_buffer_on_screen_x, frame_buffer_on_screen_y))
+
 
         pygame.display.update()
         
