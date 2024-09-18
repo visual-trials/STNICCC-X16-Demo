@@ -376,10 +376,12 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
     tmp_vertices = []
     for vertex_index in vertex_indices:
         tmp_vertices.append(screen_vertices[vertex_index])
+        
+    print(tmp_vertices)
 
     #print('-----------SIMPLE------------')
     (left_vertices, right_vertices, top_y, is_single_top, is_valid) = get_left_and_right_vertices_simple(vertex_indices, screen_vertices)
-    #print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
+    print(str(polygon_index)+':'+str(left_vertices)+':'+str(right_vertices)+':'+str(top_y)+':'+str(is_single_top))
     
 # FIXME: use a different polygon filler for non-convex shapes!
     if not is_valid:
@@ -508,6 +510,10 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
             print("ERROR: not adding polygon to polygon stream since it encountered an error during drawing!")
 # FIXME: can we fix/prevent this?
             return None
+
+# FIXME!            
+        return None
+            
         current_y_position += nr_of_lines_to_draw
         
         if ((current_right_index+1 == len(right_vertices)-1) and (current_left_index+1 == len(left_vertices)-1)):
@@ -850,7 +856,7 @@ def run():
 # FIXME!
 # FIXME!
     #frame_nr = 125
-    #increment_frame_by = 0
+    increment_frame_by = 0
 
     
     screen.fill(background_color)
@@ -915,6 +921,7 @@ def run():
             polygon_vertex_indices = list(range(len(unscaled_polygon_vertices)))
             if (USE_FX_POLY_FILLER_SIM):
                 
+                print(unscaled_polygon_vertices)
                 polygon_bytes = fx_sim_draw_polygon(frame_buffer, color_index, polygon_index, polygon_vertex_indices, unscaled_polygon_vertices, {}, None)
                 if polygon_bytes is None:
                     # TODO: we are now drawing a ERROR-color polygon if it was rejected
@@ -926,6 +933,9 @@ def run():
                 
             else:
                 pygame.draw.polygon(frame_buffer, color_index, unscaled_polygon_vertices, 0)
+
+# FIXME!
+            break
 
 
         # Blitting the frame_buffer to the (scaled) screen
@@ -955,8 +965,8 @@ def run():
         if ALLOW_PAUSING_AND_REVERSE_PLAYBACK:
             if frame_nr > max_frame_nr:
                 frame_nr = max_frame_nr
-            if frame_nr < 1:
-                frame_nr = 1
+            if frame_nr < 0:
+                frame_nr = 0
         else:
             if frame_nr > max_frame_nr:
                 running = False

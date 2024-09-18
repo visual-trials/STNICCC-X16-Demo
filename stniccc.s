@@ -138,6 +138,18 @@ NR_OF_INDEXED_VERTICES_BYTES = $5C ; 5D
 
 CURRENT_BUFFER =             $5F
 
+; Used by polygon filler
+MIN_Y =                      $60
+MAX_Y =                      $61
+
+CURRENT_VERTEX_INDEX =       $63
+
+X1 =                         $64
+Y1 =                         $65
+X2 =                         $66
+Y2 =                         $67
+
+
 
 ; === RAM addresses ===
 
@@ -161,7 +173,8 @@ CLEAR_256_BYTES_CODE     = $5000   ; takes up to 00F0+rts (256 bytes to clear = 
 ; FIXME!
 ; FIXME!
 ; FIXME!
-VERTICES                 = $50F0   ; 7 * 2 bytes (max 7 vertices with and x and y coordinate)
+VERTICES_X               = $50F0   ; 7 bytes (max 7 vertices with an x and y coordinate)
+VERTICES_Y               = $50F7   ; 7 bytes (max 7 vertices with an x and y coordinate)
 
 LEFT_NIBBLE_TO_RIGHT_NIBBLE = $5100   ; 256 bytes NOTE: this contains very little data, butwe have a left nibble (4 highest bits) so we need 256 bytes
 LEFT_NIBBLE_TO_BOTH_NIBBLES = $5101   ;
@@ -181,6 +194,10 @@ VSYNC_BIT         = $01
 
 ; FIXME: TURN this OFF in PRODUCTION!
 ;DEBUG_SHOW_THREE_FRAMES_MISSES = 1 ; If we exceed 3 frames, we missed a frame (or more) and we mark this (for now) by changing the border color
+
+
+.include "polygon_fx.s"
+
 
 ; --- Start of program ---
 start:
@@ -544,32 +561,31 @@ load_next_vertex_indexed:
 indexed_coords_address_LO:
     tay  ; put the vertex-index * 2 in y
     lda (INDEXED_COORDS_ADDRESS),y
-    sta VERTICES, x
+    sta VERTICES_X, x
     iny
     lda (INDEXED_COORDS_ADDRESS),y
-    sta VERTICES+1, x
+    sta VERTICES_Y, x
     bra vertex_coords_loaded
 
 indexed_coords_address_HI:
     tay  ; put the vertex-index * 2 in y
     lda (INDEXED_COORDS_ADDRESS_128),y
-    sta VERTICES, x
+    sta VERTICES_X, x
     iny
     lda (INDEXED_COORDS_ADDRESS_128),y
-    sta VERTICES+1, x
+    sta VERTICES_Y, x
 
 vertex_coords_loaded:
  
     inc VERTEX_INDEX_IN_POLYGON
     ldy VERTEX_INDEX_IN_POLYGON
     inx
-    inx
     
     cpy NR_OF_VERTICES_IN_POLYGON
     bcc load_next_vertex_indexed
     beq load_next_vertex_indexed
 
-; FIXME!    jsr draw_polygon_fast
+    jsr draw_polygon_fx
 
 
     lda CURRENT_RAM_BANK
@@ -648,20 +664,18 @@ load_next_vertex_non_indexed:
     
     lda (CURRENT_POLYGON_ADDRESS), y   ; loads the x-coord
     iny
-    sta VERTICES, x
+    sta VERTICES_X, x
     
     lda (CURRENT_POLYGON_ADDRESS), y   ; loads the y-coord
     iny
-    sta VERTICES+1, x ; TODO: we dont have to do +1 here, we can simply increase x
-    inx
+    sta VERTICES_Y, x ; TODO: we dont have to do +1 here, we can simply increase x
     inx
     
     cpy NR_OF_VERTICES_IN_POLYGON_BYTES
     bcc load_next_vertex_non_indexed
     beq load_next_vertex_non_indexed
  
-; FIXME! 
-;    jsr draw_polygon_fast
+    jsr draw_polygon_fx
     
     lda CURRENT_RAM_BANK
     sta RAM_BANK  ; We reload the ram bank because the divide_fast (inside draw_polygon) changes it
