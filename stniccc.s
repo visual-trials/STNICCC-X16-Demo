@@ -33,6 +33,8 @@ VERA_DC_HSCALE    = $9F2A  ; DCSEL=0
 VERA_DC_VSCALE    = $9F2B  ; DCSEL=0
 VERA_DC_BORDER    = $9F2C  ; DCSEL=0
 
+VERA_DC_HSTART    = $9F29  ; DCSEL=1
+VERA_DC_HSTOP     = $9F2A  ; DCSEL=1
 VERA_DC_VSTART    = $9F2B  ; DCSEL=1
 VERA_DC_VSTOP     = $9F2C  ; DCSEL=1
 
@@ -365,25 +367,12 @@ increment_frame_address:
 
 frame_address_set:
 
+    ; FIXME: replace this with something proper!
+    jsr dumb_wait_for_vsync
+
+
     inc FRAME_INDEX
     lda FRAME_INDEX
-
-    ; Show the buffer we just wrote to
-;    lda CURRENT_BUFFER
-;    bne set_buffer_1_address
-;    
-;set_buffer_0_address:
-;    lda #($000 >> 1)
-;    sta VERA_L0_TILEBASE
-;    bra buffer_address_set
-;    
-;set_buffer_1_address:
-;    lda #($100 >> 1)
-;    sta VERA_L0_TILEBASE
-;    
-;buffer_address_set:
-
-
 
     ; Every frame we switch to which buffer we write to and which one we show
     lda #1
@@ -398,6 +387,18 @@ show_buffer_1:
 show_buffer_0:
     jsr setup_vera_for_layer0_bitmap_buffer_0
 done_switching_buffer:
+
+    
+; FIXME!
+; FIXME!
+; FIXME!
+;    lda FRAME_INDEX
+;    cmp #13+1
+;    bne no_tmp_loop2
+;tmp_loop2:
+;    bra tmp_loop2
+;no_tmp_loop2:
+    
 
 
 
@@ -850,6 +851,23 @@ high_nibble_done:
     
     
     
+; This is just a dumb verison of a proper vsync-wait
+dumb_wait_for_vsync:
+
+    ; We wait until SCANLINE == $1FF (indicating the beam is off screen, lines 512-524)
+wait_for_scanline_bit8:
+    lda VERA_IEN
+    and #%01000000
+    beq wait_for_scanline_bit8
+    
+wait_for_scanline_low:
+    lda VERA_SCANLINE_L
+    cmp #$FF
+    bne wait_for_scanline_low
+
+    rts
+
+    
 setup_covering_sprites:
     ; We setup 5 covering 64x64 sprites that contain 2 rows of black pixels at the bottom (actually we flip the sprite vertically, so its at the top of their buffer)
     ; We can use the 128 bytes available between the two bitmap buffer for these black pixels. Note: these pixels cannot be 0, since that would make them transparant!
@@ -864,9 +882,7 @@ setup_covering_sprites:
     lda #>($FA00)
     sta VERA_ADDR_HIGH
 
-; FIXME!
-;    lda #BLACK_COLOR
-    lda #3
+    lda #BLACK_COLOR
     ldx #128
 next_black_pixel:
     sta VERA_DATA0
@@ -943,14 +959,22 @@ setup_next_sprite:
     
 setup_vera_for_layer0_bitmap_general:
 
-    lda #$40                 ; 2:1 scale (320 x 240 pixels on screen)
-    sta VERA_DC_HSCALE
-    sta VERA_DC_VSCALE
+    lda #%00000010  ; DCSEL=1
+    sta VERA_CTRL
+   
+    lda #32*2/4
+    sta VERA_DC_HSTART
+    lda #(256+32)*2/4
+    sta VERA_DC_HSTOP
     
     ; -- Setup Layer 0 --
     
     lda #%00000000           ; DCSEL=0, ADDRSEL=0
     sta VERA_CTRL
+    
+    lda #$40                 ; 2:1 scale (320 x 240 pixels on screen)
+    sta VERA_DC_HSCALE
+    sta VERA_DC_VSCALE
     
     ; Enable bitmap mode and color depth = 8bpp on layer 0
     lda #(4+3)

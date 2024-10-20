@@ -120,7 +120,7 @@ draw_pixel_do_y_to_address_1:
 draw_pixel_y_to_address_done:
 
 ; FIXME: which color?
-    lda #2
+    lda #27
     sta VERA_DATA0
 
     rts
