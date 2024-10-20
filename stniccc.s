@@ -183,8 +183,7 @@ LEFT_NIBBLE_TO_BOTH_NIBBLES = $5101   ;
 ; === Other constants ===
 
 BACKGROUND_COLOR = 0
-BLACK_COLOR = 254     ; this is a non-transparant black color
-STARTING_BACKGROUND_COLOR = $16  ; this is the color of the first wall shown
+BLACK_COLOR = 16     ; this is a non-transparant black color
 
 LOAD_FILE = 1
 USE_JUMP_TABLE = 1
@@ -203,6 +202,30 @@ VSYNC_BIT         = $01
 start:
 
     sei
+    
+    ; FIXME: do this a cleaner/nicer way!
+    lda VERA_DC_VIDEO
+    and #%10001111           ; Disable Layer 0, Layer 1 and sprites
+    sta VERA_DC_VIDEO
+
+    jsr generate_clear_256_bytes_code
+    
+    ; This clears (almost) the entire VRAM and sets it to the BACKGROUND_COLOR
+    jsr clear_vram_fast_4_bytes
+    
+    jsr generate_y_to_address_table_0
+    jsr generate_y_to_address_table_1
+    
+    ; This also fills their buffers two 64-pixel rows of black (non transparant) pixels
+    jsr setup_covering_sprites
+    
+    jsr setup_vera_for_layer0_bitmap_general
+    
+    
+    ; We start with showing buffer 1 while filling buffer 0
+    jsr setup_vera_for_layer0_bitmap_buffer_1
+    stz BUFFER_NR
+
     
     ; ---- load scene files ----
     
@@ -223,6 +246,12 @@ load_next_scene_file:
     ; Setting the border color to black
 ;    lda #0
 ;    sta VERA_DC_BORDER
+
+
+    ; FIXME: this vsync-handling should probably be REPLACED!
+;    jsr backup_default_irq_handler
+;    jsr enable_vsync_handler
+    
 
     ; Start stream playback
     jsr playback_stream
@@ -253,6 +282,19 @@ playback_stream:
 
     
 next_frame:
+
+; FIXME! do not ALWAYS clear the buffer! THIS SHOULD BE CONDITIONALLY!
+; FIXME! do not ALWAYS clear the buffer! THIS SHOULD BE CONDITIONALLY!
+; FIXME! do not ALWAYS clear the buffer! THIS SHOULD BE CONDITIONALLY!
+
+    lda BUFFER_NR
+    bne do_clear_1
+    jsr clear_buffer_0_fast
+    bra done_clearing_buffer
+do_clear_1:
+    jsr clear_buffer_1_fast
+done_clearing_buffer:
+
 
     lda CURRENT_RAM_BANK
     sta RAM_BANK  ; We reload the ram bank because the divide_fast (inside draw_polygon) changes it
@@ -327,19 +369,37 @@ frame_address_set:
     lda FRAME_INDEX
 
     ; Show the buffer we just wrote to
-    lda CURRENT_BUFFER
-    bne set_buffer_1_address
-    
-set_buffer_0_address:
-    lda #($000 >> 1)
-    sta VERA_L0_TILEBASE
-    bra buffer_address_set
-    
-set_buffer_1_address:
-    lda #($100 >> 1)
-    sta VERA_L0_TILEBASE
-    
-buffer_address_set:
+;    lda CURRENT_BUFFER
+;    bne set_buffer_1_address
+;    
+;set_buffer_0_address:
+;    lda #($000 >> 1)
+;    sta VERA_L0_TILEBASE
+;    bra buffer_address_set
+;    
+;set_buffer_1_address:
+;    lda #($100 >> 1)
+;    sta VERA_L0_TILEBASE
+;    
+;buffer_address_set:
+
+
+
+    ; Every frame we switch to which buffer we write to and which one we show
+    lda #1
+    eor BUFFER_NR
+    sta BUFFER_NR
+
+    ; If we are going to fill buffer 1 (not 0) then we show buffer 0
+    bne show_buffer_0
+show_buffer_1:
+    jsr setup_vera_for_layer0_bitmap_buffer_1
+    bra done_switching_buffer
+show_buffer_0:
+    jsr setup_vera_for_layer0_bitmap_buffer_0
+done_switching_buffer:
+
+
 
     jmp next_frame
 
@@ -787,4 +847,474 @@ high_nibble_a:
 high_nibble_done:
 
     rts
+    
+    
+    
+setup_covering_sprites:
+    ; We setup 5 covering 64x64 sprites that contain 2 rows of black pixels at the bottom (actually we flip the sprite vertically, so its at the top of their buffer)
+    ; We can use the 128 bytes available between the two bitmap buffer for these black pixels. Note: these pixels cannot be 0, since that would make them transparant!
+
+    ; We first fill these 128 with a non-transparant black color
+    ; The buffer of these sprites is at 320*200 (right after the end of the first buffer) = 64000 = $0FA00
+    
+    lda #%00010000      ; setting bit 16 of vram address to 0, setting auto-increment value to 1
+    sta VERA_ADDR_BANK
+    lda #<($FA00)
+    sta VERA_ADDR_LOW
+    lda #>($FA00)
+    sta VERA_ADDR_HIGH
+
+; FIXME!
+;    lda #BLACK_COLOR
+    lda #3
+    ldx #128
+next_black_pixel:
+    sta VERA_DATA0
+    dex
+    bne next_black_pixel
+    
+    ; We then setup the actual 5 sprites
+
+    lda #%00010001      ; setting bit 16 of vram address to 1, setting auto-increment value to 1
+    sta VERA_ADDR_BANK
+
+    lda #<(VERA_SPRITES)
+    sta VERA_ADDR_LOW
+    lda #>(VERA_SPRITES)
+    sta VERA_ADDR_HIGH
+
+    ldx #0
+    
+    stz SPRITE_X
+    stz SPRITE_X+1
+
+setup_next_sprite:
+
+    ; The buffer of these sprites is at 320*200 (right after the end of the first buffer) = 64000 = $0FA00
+
+    ; Address (12:5)
+    lda #<($FA00>>5)
+    sta VERA_DATA0
+
+    ; Mode,	-	, Address (16:13)
+    lda #<($FA00>>13)
+    ora #%10000000 ; 8bpp
+    sta VERA_DATA0
+    
+    ; X (7:0)
+    lda SPRITE_X
+    sta VERA_DATA0
+    
+    ; X (9:8)
+    lda SPRITE_X+1
+    sta VERA_DATA0
+
+    ; Y (7:0)
+    lda #<(-62)
+    sta VERA_DATA0
+
+    ; Y (9:8)
+    lda #>(-64)
+    sta VERA_DATA0
+    
+    ; Collision mask	Z-depth	V-flip	H-flip
+    lda #%00001110   ; Z-depth = in front of all layers, v-flip = 1
+    sta VERA_DATA0
+
+    ; Sprite height,	Sprite width,	Palette offset
+    lda #%11110000 ; 64x64, 0 palette offset
+    sta VERA_DATA0
+
+    clc
+    lda SPRITE_X
+    adc #64
+    sta SPRITE_X
+    lda SPRITE_X+1
+    adc #0
+    sta SPRITE_X+1
+    
+    inx
+    
+    cpx #5
+    bne setup_next_sprite
+
+    rts
+
+    
+setup_vera_for_layer0_bitmap_general:
+
+    lda #$40                 ; 2:1 scale (320 x 240 pixels on screen)
+    sta VERA_DC_HSCALE
+    sta VERA_DC_VSCALE
+    
+    ; -- Setup Layer 0 --
+    
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+    
+    ; Enable bitmap mode and color depth = 8bpp on layer 0
+    lda #(4+3)
+    sta VERA_L0_CONFIG
+
+    rts
+    
+    
+; FIXME: this can be done more efficiently!    
+setup_vera_for_layer0_bitmap_buffer_0:
+
+    ; -- Setup Layer 0 --
+    
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+    
+    lda VERA_DC_VIDEO
+    ora #%00010000           ; Enable Layer 0
+    and #%10011111           ; Disable Layer 1 and sprites
+    sta VERA_DC_VIDEO
+
+    ; Set layer0 tilebase to 0x00000 and tile width to 320 px
+    lda #0
+    sta VERA_L0_TILEBASE
+
+    ; Setting VSTART/VSTOP so that we have 200 rows on screen (320x200 pixels on screen)
+
+    lda #%00000010  ; DCSEL=1
+    sta VERA_CTRL
+   
+    lda #20
+    sta VERA_DC_VSTART
+    lda #400/2+20-1
+    sta VERA_DC_VSTOP
+    
+    rts
+    
+; FIXME: this can be done more efficiently!    
+setup_vera_for_layer0_bitmap_buffer_1:
+
+    ; -- Setup Layer 0 --
+    
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+    
+    lda VERA_DC_VIDEO
+    ora #%01010000           ; Enable Layer 0 and sprites
+    and #%11011111           ; Disable Layer 1
+    sta VERA_DC_VIDEO
+
+    ; Buffer 1 starts at: (320*200-512) = 31*2048
+    
+    ; Set layer0 tilebase to 0x0F800 and tile width to 320 px
+    lda #(31<<2)
+    sta VERA_L0_TILEBASE
+
+    ; Setting VSTART/VSTOP so that we have 202 rows on screen (320x200 pixels on screen)
+
+    lda #%00000010  ; DCSEL=1
+    sta VERA_CTRL
+   
+    lda #20-2  ; we show 2 lines of 'garbage' so the *actual* bitmap starts at 31*2048 + 640  (128 bytes after the *first* buffer ends)
+    ; Note: we cover these 2 garbage-lines with five 64x64 black sprites (of which only the two last lines are actually black and have their sprite data pointed to the 128 bytes mentioned above)
+    sta VERA_DC_VSTART
+    lda #400/2+20-1
+    sta VERA_DC_VSTOP
+    
+    rts
+
+
+clear_buffer_0_fast:
+    ; We first need to fill the 32-bit cache with 4 times our background color
+
+    lda #%00001100           ; DCSEL=6, ADDRSEL=0
+    sta VERA_CTRL
+
+    ; TODO: we *could* use 'one byte cache cycling' so we have to set only *one* byte of the cache here
+    lda #BACKGROUND_COLOR
+    sta VERA_FX_CACHE_L      ; cache32[7:0]
+    sta VERA_FX_CACHE_M      ; cache32[15:8]
+    sta VERA_FX_CACHE_H      ; cache32[23:16]
+    sta VERA_FX_CACHE_U      ; cache32[31:24]
+
+    ; We setup blit writes
+    
+    lda #%00000100           ; DCSEL=2, ADDRSEL=0
+    sta VERA_CTRL
+
+    lda #%01000000           ; transparent writes = 0, blit write = 1, cache fill enabled = 0, one byte cache cycling = 0, 16bit hop = 0, 4bit mode = 0, normal addr1 mode 
+    sta VERA_FX_CTRL
+
+    ; -- Set the starting VRAM address --
+    lda #%00110000           ; Setting bit 16 of vram address to the highest bit (=0), setting auto-increment value to 4 bytes
+    sta VERA_ADDR_BANK
+    
+    ; We start at the beginning of the PIXELS of buffer 0 (=the very beginning of VRAM)
+    lda #0
+    sta VERA_ADDR_HIGH
+    lda #0
+    sta VERA_ADDR_LOW
+    
+    ; One buffer of 320x200 pixels
+    ; 64000 * 1 byte / 256 = 250 iterations
+
+    ldx #250
+clear_buffer_0_next_256_bytes:
+    jsr CLEAR_256_BYTES_CODE
+    dex
+    bne clear_buffer_0_next_256_bytes
+     
+; FIXME: we should NOT do this right?
+; FIXME: we should NOT do this right?
+; FIXME: we should NOT do this right?
+    lda #%00000000           ; transparent writes = 0, blit write = 0, cache fill enabled = 0, one byte cache cycling = 0, 16bit hop = 0, 4bit mode = 0, normal addr1 mode 
+    sta VERA_FX_CTRL
+    
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+
+    rts
+
+
+
+clear_buffer_1_fast:
+    ; We first need to fill the 32-bit cache with 4 times our background color
+
+    lda #%00001100           ; DCSEL=6, ADDRSEL=0
+    sta VERA_CTRL
+
+    ; TODO: we *could* use 'one byte cache cycling' so we have to set only *one* byte of the cache here
+    lda #BACKGROUND_COLOR
+    sta VERA_FX_CACHE_L      ; cache32[7:0]
+    sta VERA_FX_CACHE_M      ; cache32[15:8]
+    sta VERA_FX_CACHE_H      ; cache32[23:16]
+    sta VERA_FX_CACHE_U      ; cache32[31:24]
+
+    ; We setup blit writes
+    
+    lda #%00000100           ; DCSEL=2, ADDRSEL=0
+    sta VERA_CTRL
+
+    lda #%01000000           ; transparent writes = 0, blit write = 1, cache fill enabled = 0, one byte cache cycling = 0, 16bit hop = 0, 4bit mode = 0, normal addr1 mode 
+    sta VERA_FX_CTRL
+
+    ; -- Set the starting VRAM address --
+    lda #%00110000           ; Setting bit 16 of vram address to the highest bit (=0), setting auto-increment value to 4 bytes
+    sta VERA_ADDR_BANK
+    
+    ; We start at the beginning of the PIXELS of buffer 1
+    ; Note Buffer 1 PIXELS starts at: (320*200-512+320*2) = $0FA80
+    
+    lda #$FA
+    sta VERA_ADDR_HIGH
+    lda #$80
+    sta VERA_ADDR_LOW
+    
+    ; One buffer of 320x200 pixels
+    ; 64000 * 1 byte / 256 = 250 iterations
+
+    ldx #250
+clear_buffer_1_next_256_bytes:
+    jsr CLEAR_256_BYTES_CODE
+    dex
+    bne clear_buffer_1_next_256_bytes 
+     
+; FIXME: we should NOT do this right?
+; FIXME: we should NOT do this right?
+; FIXME: we should NOT do this right?
+    lda #%00000000           ; transparent writes = 0, blit write = 0, cache fill enabled = 0, one byte cache cycling = 0, 16bit hop = 0, 4bit mode = 0, normal addr1 mode 
+    sta VERA_FX_CTRL
+    
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+
+    rts
+
+    
+clear_vram_fast_4_bytes:
+
+    ; We first need to fill the 32-bit cache with 4 times our background color
+
+    lda #%00001100           ; DCSEL=6, ADDRSEL=0
+    sta VERA_CTRL
+
+    ; TODO: we *could* use 'one byte cache cycling' so we have to set only *one* byte of the cache here
+    lda #BACKGROUND_COLOR
+    sta VERA_FX_CACHE_L      ; cache32[7:0]
+    sta VERA_FX_CACHE_M      ; cache32[15:8]
+    sta VERA_FX_CACHE_H      ; cache32[23:16]
+    sta VERA_FX_CACHE_U      ; cache32[31:24]
+
+    ; We setup blit writes
+    
+    lda #%00000100           ; DCSEL=2, ADDRSEL=0
+    sta VERA_CTRL
+
+    lda #%01000000           ; transparent writes = 0, blit write = 1, cache fill enabled = 0, one byte cache cycling = 0, 16bit hop = 0, 4bit mode = 0, normal addr1 mode 
+    sta VERA_FX_CTRL
+
+    ; -- Set the starting VRAM address --
+    lda #%00110000           ; Setting bit 16 of vram address to the highest bit (=0), setting auto-increment value to 4 bytes
+    sta VERA_ADDR_BANK
+    
+    ; We start at the very beginning of VRAM
+    lda #0
+    sta VERA_ADDR_HIGH
+    lda #0
+    sta VERA_ADDR_LOW
+    
+    ; Two full frame buffers + 2 extra 320-rows + two 64-rows for the covering sprites (not precise, but good enough)
+    ; 128768 * 1 byte / 256 = 503 iterations = 256 + 247 iterations
+    ldx #0
+clear_next_256_bytes_256:
+    jsr CLEAR_256_BYTES_CODE
+    dex
+    bne clear_next_256_bytes_256
+
+    ldx #247
+clear_next_256_bytes:
+    jsr CLEAR_256_BYTES_CODE
+    dex
+    bne clear_next_256_bytes 
+     
+    lda #%00000000           ; transparent writes = 0, blit write = 0, cache fill enabled = 0, one byte cache cycling = 0, 16bit hop = 0, 4bit mode = 0, normal addr1 mode 
+    sta VERA_FX_CTRL
+    
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+    
+    rts
+    
+    
+    
+generate_clear_256_bytes_code:
+
+    lda #<CLEAR_256_BYTES_CODE
+    sta CODE_ADDRESS
+    lda #>CLEAR_256_BYTES_CODE
+    sta CODE_ADDRESS+1
+    
+    ldy #0                 ; generated code byte counter
+
+    ; -- We generate 64 clear (stz) instructions --
+    
+    ldx #64                ; counts nr of clear instructions
+next_clear_instruction:
+
+    ; -- stz VERA_DATA0 ($9F23)
+    lda #$9C               ; stz ....
+    jsr add_code_byte
+
+    lda #$23               ; $23
+    jsr add_code_byte
+    
+    lda #$9F               ; $9F
+    jsr add_code_byte
+    
+    dex
+    bne next_clear_instruction
+
+    ; -- rts --
+    lda #$60
+    jsr add_code_byte
+
+    rts
+
+    
+add_code_byte:
+    sta (CODE_ADDRESS),y   ; store code byte at address (located at CODE_ADDRESS) + y
+    iny                    ; increase y
+    cpy #0                 ; if y == 0
+    bne done_adding_code_byte
+    inc CODE_ADDRESS+1     ; increment high-byte of CODE_ADDRESS
+done_adding_code_byte:
+    rts
+
+    
+    
+generate_y_to_address_table_0:
+
+    ; Buffer 0 starts at $00000
+    stz VRAM_ADDRESS
+    stz VRAM_ADDRESS+1
+    stz VRAM_ADDRESS+2
+
+    ; First entry
+    ldy #0
+    lda VRAM_ADDRESS
+    sta Y_TO_ADDRESS_LOW_0, y
+    lda VRAM_ADDRESS+1
+    sta Y_TO_ADDRESS_HIGH_0, y
+    lda VRAM_ADDRESS+2
+    ora #%11100000           ; +320 byte increment (=%1110)
+    sta Y_TO_ADDRESS_BANK_0, y
+
+    ; Entries 1-255
+    ldy #1
+generate_next_y_to_address_entry_0:
+    clc
+    lda VRAM_ADDRESS
+    adc #<320
+    sta VRAM_ADDRESS
+    sta Y_TO_ADDRESS_LOW_0, y
+
+    lda VRAM_ADDRESS+1
+    adc #>320
+    sta VRAM_ADDRESS+1
+    sta Y_TO_ADDRESS_HIGH_0, y
+
+    lda VRAM_ADDRESS+2
+    adc #0
+    sta VRAM_ADDRESS+2
+    ora #%11100000           ; +320 byte increment (=%1110)
+    sta Y_TO_ADDRESS_BANK_0, y
+
+    iny
+    bne generate_next_y_to_address_entry_0
+
+    rts
+    
+    
+generate_y_to_address_table_1:
+
+    ; Buffer 1 starts at 31*2048 + 640 = 64128 = $0FA80
+    
+    lda #$80
+    sta VRAM_ADDRESS
+    lda #$FA
+    sta VRAM_ADDRESS+1
+    stz VRAM_ADDRESS+2
+
+    ; First entry
+    ldy #0
+    lda VRAM_ADDRESS
+    sta Y_TO_ADDRESS_LOW_1, y
+    lda VRAM_ADDRESS+1
+    sta Y_TO_ADDRESS_HIGH_1, y
+    lda VRAM_ADDRESS+2
+    ora #%11100000           ; +320 byte increment (=%1110)
+    sta Y_TO_ADDRESS_BANK_1, y
+
+    ; Entries 1-255
+    ldy #1
+generate_next_y_to_address_entry_1:
+    clc
+    lda VRAM_ADDRESS
+    adc #<320
+    sta VRAM_ADDRESS
+    sta Y_TO_ADDRESS_LOW_1, y
+
+    lda VRAM_ADDRESS+1
+    adc #>320
+    sta VRAM_ADDRESS+1
+    sta Y_TO_ADDRESS_HIGH_1, y
+
+    lda VRAM_ADDRESS+2
+    adc #0
+    sta VRAM_ADDRESS+2
+    ora #%11100000           ; +320 byte increment (=%1110)
+    sta Y_TO_ADDRESS_BANK_1, y
+
+    iny
+    bne generate_next_y_to_address_entry_1
+
+    rts
+
 

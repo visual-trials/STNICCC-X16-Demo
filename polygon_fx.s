@@ -50,11 +50,14 @@ vertex_index_ok:
 ; FIXME! IMPLEMENT!
 ; FIXME! IMPLEMENT!
 ; FIXME! IMPLEMENT!
-    stp
-    lda X1
-    lda Y1
-    lda X2
-    lda Y2
+;    stp
+;    lda X1
+;    lda Y1
+;    lda X2
+;    lda Y2
+    
+; FIXME: currently drawing a SINGLE pixel!
+    jsr draw_pixel
 
 
 
@@ -70,3 +73,55 @@ done_with_all_vertex_pairs:
 
 
     rts
+    
+    
+    
+    
+    ; FIXME: currently using X1 and Y1 only!
+draw_pixel:
+
+    lda BUFFER_NR
+    bne draw_pixel_do_y_to_address_1
+    
+draw_pixel_do_y_to_address_0:
+    ldx Y1
+    
+    clc
+    lda Y_TO_ADDRESS_LOW_0, x
+    adc X1
+    sta VERA_ADDR_LOW
+    
+    lda Y_TO_ADDRESS_HIGH_0, x
+    adc #0
+    sta VERA_ADDR_HIGH
+    
+    lda Y_TO_ADDRESS_BANK_0, x
+    adc #0
+    sta VERA_ADDR_BANK
+    
+    bra draw_pixel_y_to_address_done
+
+draw_pixel_do_y_to_address_1:
+    ldx Y1
+
+    clc
+    lda Y_TO_ADDRESS_LOW_1, x
+    adc X1
+    sta VERA_ADDR_LOW
+    
+    lda Y_TO_ADDRESS_HIGH_1, x
+    adc #0
+    sta VERA_ADDR_HIGH
+    
+    lda Y_TO_ADDRESS_BANK_1, x
+    adc #0
+    sta VERA_ADDR_BANK
+
+draw_pixel_y_to_address_done:
+
+; FIXME: which color?
+    lda #2
+    sta VERA_DATA0
+
+    rts
+
