@@ -175,7 +175,8 @@ def split_scene_file():
         # print("Start of frame " + str(frame_index))
         end_byte_index, mask_byte = read_frame(sf_bytes, current_byte_index);
         # print("start_byte_index: " + str(current_byte_index))
-        # print("end_byte_index: " + str(end_byte_index))
+        # print("end_byte_index: " + str(end_byte_index) + ' bank:' + str(end_byte_index // (8*1024)) + ' left:' + str((end_byte_index // (8*1024)+1)*8*1024-end_byte_index))
+        # Note: bank 61 has at the end 548 bytes left (end_byte_index: 507356 bank:61 left:548), before going into bank 62
         # print("mask_byte: " + str(mask_byte))
         
         # we ignore the old block markers and create our own (at 8kb instead of 64kb)
