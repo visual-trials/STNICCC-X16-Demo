@@ -156,7 +156,7 @@ def split_audio_file():
         
     
 def split_scene_file():
-    sf = open("scene1.bin", "rb")
+    sf = open("SCENE1.BIN", "rb")
 
     byte = True
     sf_bytes = bytearray()
@@ -183,6 +183,7 @@ def split_scene_file():
         if mask_byte == 254:
             # TODO: we now do -1 here, is there a nicer way?
             sf_bytes[end_byte_index-1] = 255
+            print("Block marker at: " + str(end_byte_index))
         
         # print(sf_bytes[current_byte_index:end_byte_index].hex(' '))
 

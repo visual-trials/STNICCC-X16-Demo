@@ -92,11 +92,17 @@ TMP4                       = $05
 CODE_ADDRESS               = $2F ; 30
 LOAD_ADDRESS               = $31 ; 32
 STORE_ADDRESS              = $33 ; 34
+VRAM_ADDRESS               = $35 ; 36 ; 37
+BUFFER_LOAD_ADDRESS        = $38 ; 39
+
+; FIXME: these are TEMPORARY variables and should be REMOVE or REPLACED!
+VSYNC_FRAME_COUNTER        = $3A ; 3B
+DEFAULT_IRQ_VECTOR         = $3C ; 3D
 
 ; Used by the slow polygon filler
-FILL_LENGTH_LOW            = $40
-FILL_LENGTH_HIGH           = $41
-NUMBER_OF_ROWS             = $42
+FILL_LENGTH_LOW            = $42
+FILL_LENGTH_HIGH           = $43
+NUMBER_OF_ROWS             = $44
 
 ; FIXME: REMOVE THIS!?
 NEXT_STEP                  = $45
@@ -106,14 +112,31 @@ BUFFER_NR                  = $49
 SPRITE_X                   = $4A ; 4B
 CURRENT_RAM_BANK           = $4C
 
-VRAM_ADDRESS               = $50 ; 51 ; 52
+CURRENT_COLOR_BOTH_NIBBLES = $4D
+CURRENT_COLOR_LEFT_NIBBLE =  $4E
+CURRENT_COLOR_RIGHT_NIBBLE = $4F
 
-; FIXME: these are TEMPORARY variables and should be REMOVE or REPLACED!
-VSYNC_FRAME_COUNTER        = $53 ; 54
-DEFAULT_IRQ_VECTOR         = $55 ; 56
+VERTEX_INDEX_IN_POLYGON =    $50
+NR_OF_VERTICES_IN_POLYGON =  $51
+NR_OF_VERTICES_IN_POLYGON_BYTES = $52
+NR_OF_INDEXED_VERTICES_BYTES = $53 ; 54
 
+; Used by polygon filler
+MIN_Y =                      $55
+MAX_Y =                      $56
+
+CURRENT_VERTEX_INDEX =       $57
+
+X1 =                         $58
+Y1 =                         $59
+X2 =                         $5A
+Y2 =                         $5B
+
+CURRENT_BUFFER =             $60
 
 SCENE_FILE_NUMBER =          $65
+SOURCE_BANK_NUMBER =         $66
+TARGET_BANK_NUMBER =         $67
 
 FRAME_ADDRESS =              $68 ; 69
 
@@ -123,33 +146,9 @@ CURRENT_POLYGON_ADDRESS =    $74 ; 75
 BYTES_SO_FAR =               $76
 FRAME_FLAGS =                $77
 FRAME_INDEX =                $78
-; FIXME: remove? CURRENT_RAM_BANK =           $79
 
-
-CURRENT_COLOR_BOTH_NIBBLES = $4D
-CURRENT_COLOR_LEFT_NIBBLE =  $4E
-CURRENT_COLOR_RIGHT_NIBBLE = $4F
-
-PALETTE_MASK =               $54 ; 55
-RED =                        $56
-
-VERTEX_INDEX_IN_POLYGON =    $59
-NR_OF_VERTICES_IN_POLYGON =  $5A
-NR_OF_VERTICES_IN_POLYGON_BYTES = $5B
-NR_OF_INDEXED_VERTICES_BYTES = $5C ; 5D
-
-CURRENT_BUFFER =             $5F
-
-; Used by polygon filler
-MIN_Y =                      $60
-MAX_Y =                      $61
-
-CURRENT_VERTEX_INDEX =       $63
-
-X1 =                         $64
-Y1 =                         $65
-X2 =                         $66
-Y2 =                         $67
+PALETTE_MASK =               $7A ; 7B
+RED =                        $7C
 
 
 
@@ -180,6 +179,11 @@ VERTICES_Y               = $50F7   ; 7 bytes (max 7 vertices with an x and y coo
 
 LEFT_NIBBLE_TO_RIGHT_NIBBLE = $5100   ; 256 bytes NOTE: this contains very little data, butwe have a left nibble (4 highest bits) so we need 256 bytes
 LEFT_NIBBLE_TO_BOTH_NIBBLES = $5101   ;
+
+SCENE_DATA_BUFFER_ADDRESS   = $6000   ; 8*1024 = 8192 (= $2000) bytes
+
+SCENE_DATA_RAM_ADDRESS      = $A000
+SCENE_DATA_RAM_BANK         = 128    ; Note: we are currently loading the raw scene data into the 1MB point of Banked RAM
 
 
 ; === Other constants ===
@@ -229,16 +233,27 @@ start:
     stz BUFFER_NR
 
     
-    ; ---- load scene files ----
+    jsr load_scene_data_into_banked_ram
+    jsr copy_scene_data_into_7kb_chunks
     
+.if(0)
+
+; FIXME! REMOVE!
+; FIXME! REMOVE!
+; FIXME! REMOVE!
+
+    ; ---- load scene files ----
     lda #1
     sta SCENE_FILE_NUMBER
 load_next_scene_file:
     jsr load_scene_file
+    
     inc SCENE_FILE_NUMBER
     lda SCENE_FILE_NUMBER
     cmp #$51
     bne load_next_scene_file
+.endif
+    
     
 ;    jsr init_playback_screen
 
@@ -246,8 +261,11 @@ load_next_scene_file:
     ; Clear buffer $01
     
     ; Setting the border color to black
-;    lda #0
-;    sta VERA_DC_BORDER
+; FIXME!
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+    lda #230
+    sta VERA_DC_BORDER
 
 
     ; FIXME: this vsync-handling should probably be REPLACED!
@@ -273,7 +291,9 @@ playback_stream:
     lda #0
     sta FRAME_INDEX
     
-    lda #$81               ; We start at scene file 01, which corresponds to RAM BANK $81
+; FIXME! we should set this to the proper RAM_BANK!
+;    lda #$81               ; We start at scene file 01, which corresponds to RAM BANK $81
+    lda #$1               ; TMP!
     sta CURRENT_RAM_BANK
     sta RAM_BANK
     
@@ -351,6 +371,11 @@ done_drawing_frame:
     ; We go to the next ram bank and we set the frame address to $A000
     inc CURRENT_RAM_BANK
     
+; FIXME: this wont work when we are using 7kb chunks! -> maybe use a table?
+; FIXME: this wont work when we are using 7kb chunks! -> maybe use a table?
+; FIXME: this wont work when we are using 7kb chunks! -> maybe use a table?
+    stp
+    
     lda #$00
     sta FRAME_ADDRESS
     lda #$A0
@@ -364,6 +389,18 @@ increment_frame_address:
     sta FRAME_ADDRESS
     lda CURRENT_POLYGON_ADDRESS+1
     sta FRAME_ADDRESS+1
+    
+    ; We check if we are passed the 7kB barrier, if so we switch to the next bank and move the frame address back 7kB
+    cmp #$BC
+    bcc frame_address_set
+    
+    inc CURRENT_RAM_BANK
+    
+    sec
+    lda FRAME_ADDRESS+1
+    sbc #>(7*1024)
+    sta FRAME_ADDRESS+1
+    
 
 frame_address_set:
 
@@ -766,8 +803,185 @@ end_of_non_indexed_frame:
     rts
   
 
-; ====================== LOAD SCENE FILE ==============================
+scene_data_filename:      .byte    "scene1.bin" 
+end_scene_data_filename:
 
+load_scene_data_into_banked_ram:
+
+    lda #(end_scene_data_filename-scene_data_filename) ; Length of filename
+    ldx #<scene_data_filename      ; Low byte of Fname address
+    ldy #>scene_data_filename      ; High byte of Fname address
+    jsr SETNAM
+ 
+    lda #1            ; Logical file number
+    ldx #8            ; Device 8 = sd card
+    ldy #2            ; 0=ignore address in bin file (2 first bytes)
+                      ; 1=use address in bin file
+                      ; 2=?use address in bin file? (and dont add first 2 bytes?)
+    
+    jsr SETLFS
+    
+    lda #SCENE_DATA_RAM_BANK
+    sta RAM_BANK
+    
+    lda #0            ; load into Fixed RAM (current RAM Bank) (see https://github.com/X16Community/x16-docs/blob/master/X16%20Reference%20-%2004%20-%20KERNAL.md#function-name-load )
+    ldx #<SCENE_DATA_RAM_ADDRESS
+    ldy #>SCENE_DATA_RAM_ADDRESS
+    jsr LOAD
+    bcc scene_data_loaded
+    ; FIXME: do proper error handling!
+    stp
+scene_data_loaded:
+
+    rts
+
+
+copy_scene_data_into_7kb_chunks:
+
+    lda #$80
+    sta SOURCE_BANK_NUMBER
+    lda #1
+    sta TARGET_BANK_NUMBER
+    
+
+    lda #<SCENE_DATA_RAM_ADDRESS
+    sta LOAD_ADDRESS
+    lda #>SCENE_DATA_RAM_ADDRESS
+    sta LOAD_ADDRESS+1
+    
+
+copy_next_scene_bank:
+
+    lda #<SCENE_DATA_BUFFER_ADDRESS
+    sta STORE_ADDRESS
+    lda #>SCENE_DATA_BUFFER_ADDRESS
+    sta STORE_ADDRESS+1
+
+; FIXME: replace with a FAST one!
+    jsr copy_1kb_to_buffer_slow
+    jsr copy_1kb_to_buffer_slow
+    jsr copy_1kb_to_buffer_slow
+    jsr copy_1kb_to_buffer_slow
+    jsr copy_1kb_to_buffer_slow
+    jsr copy_1kb_to_buffer_slow
+    jsr copy_1kb_to_buffer_slow
+    jsr copy_1kb_to_buffer_slow
+    
+    ; Note: we revert the increment of the load address if this is the 8th bank we copied (so the first 1kb of the next target bank will also contain the same 1kb of data)
+    
+    ; We subtract $0400 to the load address (= 1024 bytes)
+    dec LOAD_ADDRESS+1
+    dec LOAD_ADDRESS+1
+    dec LOAD_ADDRESS+1
+    dec LOAD_ADDRESS+1
+    
+    ; if we reach $9C00, we need to reset to $BC00 and decrement the SOURCE_BANK_NUMBER
+    lda LOAD_ADDRESS+1
+    cmp #$9C
+    bne load_address_is_reverted
+    
+    lda #$BC
+    sta LOAD_ADDRESS+1
+    dec SOURCE_BANK_NUMBER
+
+load_address_is_reverted:
+    
+
+    lda #<SCENE_DATA_BUFFER_ADDRESS
+    sta BUFFER_LOAD_ADDRESS
+    lda #>SCENE_DATA_BUFFER_ADDRESS
+    sta BUFFER_LOAD_ADDRESS+1
+    
+    lda #<SCENE_DATA_RAM_ADDRESS
+    sta STORE_ADDRESS
+    lda #>SCENE_DATA_RAM_ADDRESS
+    sta STORE_ADDRESS+1
+    
+; FIXME: replace with a FAST one!
+    jsr copy_8kb_buffer_to_ram_bank_slow
+
+    lda SOURCE_BANK_NUMBER
+; FIXME: WHAT DO WE COUNT? TARGET OR SOURCE?
+; FIXME: which amount? +1?
+    cmp #$51+$80
+    bne copy_next_scene_bank
+
+    rts
+    
+    
+copy_1kb_to_buffer_slow:
+
+    lda SOURCE_BANK_NUMBER
+    sta RAM_BANK
+
+    ldx #4  ; (4*256 = 1024 bytes)
+copy_256_bytes_to_buffer:
+    ldy #0
+    
+copy_1_byte_to_buffer:
+    lda (LOAD_ADDRESS),y
+    sta (STORE_ADDRESS),y
+    iny
+    bne copy_1_byte_to_buffer
+    
+    ; We add $0100 to the load address (= 256 bytes)
+    inc LOAD_ADDRESS+1
+    
+    ; if we reach $C000, we need to reset to $A000 and increment the SOURCE_BANK_NUMBER
+    lda LOAD_ADDRESS+1
+    cmp #$C0
+    bne load_address_is_ok
+    
+    lda #$A0
+    sta LOAD_ADDRESS+1
+    inc SOURCE_BANK_NUMBER
+
+load_address_is_ok:
+
+    ; We add $0100 to the store address (= 256 bytes)
+    inc STORE_ADDRESS+1
+
+    dex
+    bne copy_256_bytes_to_buffer
+
+    rts
+    
+    
+copy_8kb_buffer_to_ram_bank_slow:
+
+    lda TARGET_BANK_NUMBER
+    sta RAM_BANK
+
+    ldx #8*4  ; (8*4*256 = 8192 bytes)
+copy_256_bytes_to_ram_bank:
+    ldy #0
+    
+copy_1_byte_to_ram_bank:
+    lda (BUFFER_LOAD_ADDRESS),y
+    sta (STORE_ADDRESS),y
+    iny
+    bne copy_1_byte_to_ram_bank
+    
+    ; We add $0100 to the load address (= 256 bytes)
+    inc BUFFER_LOAD_ADDRESS+1
+    
+    ; We add $0100 to the store address (= 256 bytes)
+    inc STORE_ADDRESS+1
+    
+    dex
+    bne copy_256_bytes_to_ram_bank
+
+    inc TARGET_BANK_NUMBER
+
+    rts
+
+.if(0)
+
+; FIXME! REMOVE!
+; FIXME! REMOVE!
+; FIXME! REMOVE!
+
+; ====================== LOAD SCENE FILE ==============================
 
 scene_filename:      .byte    "scene/00.bin"
 end_scene_filename:
@@ -848,6 +1062,10 @@ high_nibble_a:
 high_nibble_done:
 
     rts
+    
+.endif
+    
+    
     
     
     

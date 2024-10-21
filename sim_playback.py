@@ -783,7 +783,7 @@ def read_frame(frame_index, sf_bytes, current_byte_index):
     return current_byte_index, color_and_nr_of_vertices, frame_data
     
 def parse_scene_file():
-    sf = open("scene1.bin", "rb")
+    sf = open("SCENE1.BIN", "rb")
 
     byte = True
     sf_bytes = bytearray()
