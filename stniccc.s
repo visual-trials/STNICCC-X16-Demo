@@ -171,8 +171,13 @@ CLEAR_256_BYTES_CODE     = $5000   ; takes 00C1 bytes (256 bytes to clear = 64 *
 VERTICES_X               = $50D0   ; 7 bytes (max 7 vertices with an x and y coordinate)
 VERTICES_Y               = $50D7   ; 7 bytes (max 7 vertices with an x and y coordinate)
 
-LEFT_NIBBLE_TO_RIGHT_NIBBLE = $5100   ; 256 bytes NOTE: this contains very little data, butwe have a left nibble (4 highest bits) so we need 256 bytes
-LEFT_NIBBLE_TO_BOTH_NIBBLES = $5101   ;
+COPY_BUFFER_TO_RAM_BANK_CODE = $5100   ; takes 64 * 6 + 1 = 385 bytes = $181 bytes
+; FIXME: determine size!
+COPY_RAM_BANK_TO_BUFFER_CODE = $5300   ; takes ... bytes
+
+; FIXME: these are not FILLED atm!
+LEFT_NIBBLE_TO_RIGHT_NIBBLE = $5E00   ; 256 bytes NOTE: this contains very little data, but we have a left nibble (4 highest bits) so we need 256 bytes
+LEFT_NIBBLE_TO_BOTH_NIBBLES = $5E01   ;
 
 SCENE_DATA_BUFFER_ADDRESS   = $6000   ; 8*1024 = 8192 (= $2000) bytes
 
@@ -211,6 +216,7 @@ start:
     sta VERA_DC_VIDEO
 
     jsr generate_clear_256_bytes_code
+    jsr generate_copy_buffer_to_ram_bank_code
     
     ; This clears (almost) the entire VRAM and sets it to the BACKGROUND_COLOR
     jsr clear_vram_fast_4_bytes
@@ -897,8 +903,7 @@ load_address_is_reverted:
     lda #>SCENE_DATA_RAM_ADDRESS
     sta STORE_ADDRESS+1
     
-; FIXME: replace with a FAST one!
-    jsr copy_8kb_buffer_to_ram_bank_slow
+    jsr copy_8kb_buffer_to_ram_bank
 
     lda SOURCE_BANK_NUMBER
 ; FIXME: WHAT DO WE COUNT? TARGET OR SOURCE?
@@ -947,29 +952,17 @@ load_address_is_ok:
     rts
     
     
-copy_8kb_buffer_to_ram_bank_slow:
+copy_8kb_buffer_to_ram_bank:
 
     lda TARGET_BANK_NUMBER
     sta RAM_BANK
-
-    ldx #8*4  ; (8*4*256 = 8192 bytes)
-copy_256_bytes_to_ram_bank:
-    ldy #0
     
-copy_1_byte_to_ram_bank:
-    lda (BUFFER_LOAD_ADDRESS),y
-    sta (STORE_ADDRESS),y
-    iny
-    bne copy_1_byte_to_ram_bank
-    
-    ; We add $0100 to the load address (= 256 bytes)
-    inc BUFFER_LOAD_ADDRESS+1
-    
-    ; We add $0100 to the store address (= 256 bytes)
-    inc STORE_ADDRESS+1
-    
-    dex
-    bne copy_256_bytes_to_ram_bank
+    ldx #0
+copy_buffer_to_ram_bank_next_64:
+    jsr COPY_BUFFER_TO_RAM_BANK_CODE   ; copies 64 bytes
+    inx
+    cpx #128       ; we copy 64 * 128 bytes = 8kB
+    bne copy_buffer_to_ram_bank_next_64
 
     inc TARGET_BANK_NUMBER
 
@@ -1333,6 +1326,91 @@ clear_next_256_bytes:
     rts
     
     
+generate_copy_buffer_to_ram_bank_code:
+    
+    ; We generate 64 times a byte-copy like this (with x ranging from 0->127):
+    ;    lda $6000, x
+    ;    sta $A000, x
+    ;    lda $6080, x
+    ;    sta $A080, x
+    ;    lda $6100, x
+    ;    sta $A100, x
+    ;    lda $6180, x
+    ;    sta $A180, x
+    ;    ...
+    ;    rts
+    
+    lda #<COPY_BUFFER_TO_RAM_BANK_CODE
+    sta CODE_ADDRESS
+    lda #>COPY_BUFFER_TO_RAM_BANK_CODE
+    sta CODE_ADDRESS+1
+    
+    lda #<SCENE_DATA_BUFFER_ADDRESS
+    sta LOAD_ADDRESS
+    lda #>SCENE_DATA_BUFFER_ADDRESS
+    sta LOAD_ADDRESS+1
+    
+    lda #<SCENE_DATA_RAM_ADDRESS
+    sta STORE_ADDRESS
+    lda #>SCENE_DATA_RAM_ADDRESS
+    sta STORE_ADDRESS+1
+    
+    
+    ldy #0                 ; generated code byte counter
+
+    ; -- We generate 64 copy (lda/sta) instructions --
+    
+    ldx #64                ; counts nr of copy instructions
+
+next_copy_to_ram_bank_instruction:
+
+    ; -- lda $6000, x 
+    lda #$BD               ; lda ...., x
+    jsr add_code_byte
+
+    lda LOAD_ADDRESS
+    jsr add_code_byte
+    
+    lda LOAD_ADDRESS+1
+    jsr add_code_byte
+    
+    ; -- sta $A000, x 
+    lda #$9D               ; sta ...., x
+    jsr add_code_byte
+
+    lda STORE_ADDRESS
+    jsr add_code_byte
+    
+    lda STORE_ADDRESS+1
+    jsr add_code_byte
+    
+    clc
+    lda LOAD_ADDRESS
+    adc #$80
+    sta LOAD_ADDRESS
+    lda LOAD_ADDRESS+1
+    adc #0
+    sta LOAD_ADDRESS+1
+
+    clc
+    lda STORE_ADDRESS
+    adc #$80
+    sta STORE_ADDRESS
+    lda STORE_ADDRESS+1
+    adc #0
+    sta STORE_ADDRESS+1
+    
+    dex
+    bne next_copy_to_ram_bank_instruction
+
+    ; -- rts --
+    lda #$60
+    jsr add_code_byte
+
+
+    rts
+
+
     
 generate_clear_256_bytes_code:
 
