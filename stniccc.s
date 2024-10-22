@@ -842,6 +842,39 @@ scene_data_loaded:
     rts
 
 
+    ; New IDEA: use VRAM as buffer
+    ;
+    ; - Upload 8kB RAM Bank (with a step of 128) -> 8kB consecutive bytes in VRAM
+    ;   * Set x to 0
+    ;   * Set VRAM address to $100xx, increment to 128
+    ;   * Do this 128 times:
+    ;     * Loop/generated code (64 copies):
+    ;       * lda $A000, x
+    ;       * sta DATA0
+    ;       * lda $A040, x
+    ;       * sta DATA0
+    ;       ...
+    ;       * lda $BFC0, x
+    ;       * sta DATA0
+    ;     * Increment x
+    ; - Download 1kB parts into 9 slots of Banked RAM
+    ;   - copying 9 times 1kB!
+    ;   - 8 different targets ($A0, $A4, ..., $BC):
+    ;   * Set x to 0
+    ;   * set y to 1kB slot in the *source*
+    ;   * Set VRAM address to $1yyxx, increment to 16
+    ;   * Do this 16 times:
+    ;     * Loop/generated code (64 copies):
+    ;       * lda DATA0
+    ;       * sta $A000, x
+    ;       * lda DATA0
+    ;       * sta $A008, x
+    ;       ...
+    ;       * lda DATA0
+    ;       * sta $A3F8, x
+    ;     * Increment x
+
+
 copy_scene_data_into_7kb_chunks:
 
     lda #ORIG_SCENE_DATA_RAM_BANK
