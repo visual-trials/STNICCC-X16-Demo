@@ -133,6 +133,7 @@ X2 =                         $5A
 Y2 =                         $5B
 
 CURRENT_BUFFER =             $60
+BLOCK_NUMBER =               $61      ; 64kB block number
 
 SCENE_FILE_NUMBER =          $65
 SOURCE_BANK_NUMBER =         $66
@@ -283,25 +284,34 @@ tmp_loop:
     rts
     
     
+    ; Since we convert 8kB chunks into 7kB chunks, every 64kB block border is now offset
+    ; Here we say were these 64kB blocks start (address+bank). 
+    ; Note that a 64kB takes 9 ram banks + 1024 bytes (9*7+1 = 64 kB)
+    
+block_frame_address_high:
+    .byte $A0, $A4, $A8, $AC, $B0, $B4, $B8, $BC,  $A4, $A8, $AC
+block_ram_bank:
+    .byte   1,  10,  19,  28,  37,  46,  55,  64,   74,  83,  92
+    
 
 playback_stream:
 
     ; --- init addresses ---
 
-    lda #0
-    sta FRAME_INDEX
+    stz FRAME_INDEX
+    stz BLOCK_NUMBER
     
-; FIXME! we should set this to the proper RAM_BANK!
-;    lda #$81               ; We start at scene file 01, which corresponds to RAM BANK $81
-    lda #$1               ; TMP!
+    
+    ldx BLOCK_NUMBER
+    
+    lda block_ram_bank, x
     sta CURRENT_RAM_BANK
     sta RAM_BANK
     
-    lda #$00
+    lda #0
     sta FRAME_ADDRESS
-    lda #$A0
+    lda block_frame_address_high, x
     sta FRAME_ADDRESS+1
-
     
 next_frame:
 
@@ -368,18 +378,22 @@ done_drawing_frame:
     cpx #$FE    ; block/ram bank marker
     bne increment_frame_address
 
-    ; We go to the next ram bank and we set the frame address to $A000
-    inc CURRENT_RAM_BANK
+
+
+    ; We go to the next 64kB blockram bank + address
     
-; FIXME: this wont work when we are using 7kb chunks! -> maybe use a table?
-; FIXME: this wont work when we are using 7kb chunks! -> maybe use a table?
-; FIXME: this wont work when we are using 7kb chunks! -> maybe use a table?
-    stp
+    inc BLOCK_NUMBER
     
-    lda #$00
+    ldx BLOCK_NUMBER
+    
+    lda block_ram_bank, x
+    sta CURRENT_RAM_BANK
+    
+    lda #0
     sta FRAME_ADDRESS
-    lda #$A0
+    lda block_frame_address_high, x
     sta FRAME_ADDRESS+1
+
     bra frame_address_set
 
 increment_frame_address:
