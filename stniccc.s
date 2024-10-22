@@ -135,7 +135,6 @@ Y2 =                         $5B
 CURRENT_BUFFER =             $60
 BLOCK_NUMBER =               $61      ; 64kB block number
 
-SCENE_FILE_NUMBER =          $65
 SOURCE_BANK_NUMBER =         $66
 TARGET_BANK_NUMBER =         $67
 
@@ -183,8 +182,13 @@ LEFT_NIBBLE_TO_BOTH_NIBBLES = $5101   ;
 
 SCENE_DATA_BUFFER_ADDRESS   = $6000   ; 8*1024 = 8192 (= $2000) bytes
 
+; Original scene data
+ORIG_SCENE_DATA_RAM_ADDRESS = $A000
+ORIG_SCENE_DATA_RAM_BANK    = $80    ; Note: we are currently loading the raw scene data into the 1MB point of Banked RAM
+
+; Scene data in 7kB chunks (overlapping 1kB for each RAM bank)
 SCENE_DATA_RAM_ADDRESS      = $A000
-SCENE_DATA_RAM_BANK         = 128    ; Note: we are currently loading the raw scene data into the 1MB point of Banked RAM
+SCENE_DATA_RAM_BANK         = $1 
 
 
 ; === Other constants ===
@@ -197,9 +201,6 @@ USE_JUMP_TABLE = 1
 DEBUG = 0
 
 VSYNC_BIT         = $01
-
-; FIXME: TURN this OFF in PRODUCTION!
-;DEBUG_SHOW_THREE_FRAMES_MISSES = 1 ; If we exceed 3 frames, we missed a frame (or more) and we mark this (for now) by changing the border color
 
 
 .include "polygon_fx.s"
@@ -236,24 +237,6 @@ start:
     
     jsr load_scene_data_into_banked_ram
     jsr copy_scene_data_into_7kb_chunks
-    
-.if(0)
-
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-
-    ; ---- load scene files ----
-    lda #1
-    sta SCENE_FILE_NUMBER
-load_next_scene_file:
-    jsr load_scene_file
-    
-    inc SCENE_FILE_NUMBER
-    lda SCENE_FILE_NUMBER
-    cmp #$51
-    bne load_next_scene_file
-.endif
     
     
 ;    jsr init_playback_screen
@@ -835,12 +818,12 @@ load_scene_data_into_banked_ram:
     
     jsr SETLFS
     
-    lda #SCENE_DATA_RAM_BANK
+    lda #ORIG_SCENE_DATA_RAM_BANK
     sta RAM_BANK
     
     lda #0            ; load into Fixed RAM (current RAM Bank) (see https://github.com/X16Community/x16-docs/blob/master/X16%20Reference%20-%2004%20-%20KERNAL.md#function-name-load )
-    ldx #<SCENE_DATA_RAM_ADDRESS
-    ldy #>SCENE_DATA_RAM_ADDRESS
+    ldx #<ORIG_SCENE_DATA_RAM_ADDRESS
+    ldy #>ORIG_SCENE_DATA_RAM_ADDRESS
     jsr LOAD
     bcc scene_data_loaded
     ; FIXME: do proper error handling!
@@ -852,15 +835,15 @@ scene_data_loaded:
 
 copy_scene_data_into_7kb_chunks:
 
-    lda #$80
+    lda #ORIG_SCENE_DATA_RAM_BANK
     sta SOURCE_BANK_NUMBER
-    lda #1
+    lda #SCENE_DATA_RAM_BANK
     sta TARGET_BANK_NUMBER
     
 
-    lda #<SCENE_DATA_RAM_ADDRESS
+    lda #<ORIG_SCENE_DATA_RAM_ADDRESS
     sta LOAD_ADDRESS
-    lda #>SCENE_DATA_RAM_ADDRESS
+    lda #>ORIG_SCENE_DATA_RAM_ADDRESS
     sta LOAD_ADDRESS+1
     
 
@@ -989,98 +972,6 @@ copy_1_byte_to_ram_bank:
 
     rts
 
-.if(0)
-
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-
-; ====================== LOAD SCENE FILE ==============================
-
-scene_filename:      .byte    "scene/00.bin"
-end_scene_filename:
-
-; https://gist.github.com/JimmyDansbo/f955378ee4f1087c2c286fcd6956e223
-; https://www.commanderx16.com/forum/index.php?/topic/80-loading-a-file-into-vram-assembly/
-load_scene_file:
-
-    lda SCENE_FILE_NUMBER
-    ora #$80               ; We put the SCENE data into RAM BANKs 128 and higher
-    sta RAM_BANK
-    
-    jsr set_scene_filename
-    
-    ; TODO; what should the logical file number be?
-    lda #1            ; Logical file number
-    ldx #8            ; Device 8 = sd card
-    ldy #0            ; 0=ignore address in bin file (2 first bytes)
-                      ; 1=use address in bin file
-    jsr SETLFS
-
-    lda #(end_scene_filename-scene_filename) ; Length of scene filename
-    ldx #<scene_filename      ; Low byte of Fname address
-    ldy #>scene_filename      ; High byte of Fname address
-    jsr SETNAM
-
-    ldy #$A0            ; VERA HIGH address
-    ldx #$00            ; VERA LOW address
-
-    lda #$00            ; RAM?
-    jsr LOAD            ; Load binary file into VRAM, ignoring 2 first bytes
-    
-    rts
-    
-
-set_scene_filename:
-
-    lda SCENE_FILE_NUMBER
-    and #$0F
-    
-    cmp #$0A
-    bcs low_nibble_a
-    
-low_nibble_0:
-    clc
-    adc #48-0  ; = '0'
-    sta scene_filename+7
-    bra low_nibble_done
-    
-low_nibble_a:
-    clc
-    adc #65-10  ; = 'a'
-    sta scene_filename+7
-    
-low_nibble_done:
-
-    lda SCENE_FILE_NUMBER
-    lsr
-    lsr
-    lsr
-    lsr
-    and #$0F
-    
-    cmp #$0A
-    bcs high_nibble_a
-    
-high_nibble_0:
-    clc
-    adc #48-0  ; = '0'
-    sta scene_filename+6
-    bra high_nibble_done
-    
-high_nibble_a:
-    clc
-    adc #65-10  ; = 'a'
-    sta scene_filename+6
-    
-high_nibble_done:
-
-    rts
-    
-.endif
-    
-    
-    
     
     
 ; This is just a dumb verison of a proper vsync-wait
