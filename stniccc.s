@@ -136,6 +136,7 @@ X2 =                         $5A
 Y2 =                         $5B
 
 CURRENT_BUFFER =             $60
+; FIXME: REMOVE!
 BLOCK_NUMBER =               $61      ; 64kB block number
 
 SOURCE_BANK_NUMBER =         $66
@@ -155,7 +156,7 @@ RED =                        $7C
 
 
 ; FIXME!
-DO_SLOW = 1
+DO_SLOW = 0
 
 
 ; === RAM addresses ===
@@ -326,10 +327,25 @@ tmp_loop:
     ; Here we say were these 64kB blocks start (address+bank). 
     ; Note that a 64kB takes 9 ram banks + 1024 bytes (9 * 7kB + 1kB = 64 kB)
     
+.if(DO_SLOW)
 block_frame_address_high:
     .byte $A0, $A4, $A8, $AC, $B0, $B4, $B8, $BC,  $A4, $A8, $AC
 block_ram_bank:
     .byte   1,  10,  19,  28,  37,  46,  55,  64,   74,  83,  92
+.else
+is_last_bank_of_nine:
+    .byte 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 1-9
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 10-18
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 19-27
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 28-36
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 37-45
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 46-54
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 55-63
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 64-72
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 73-81
+    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 82-90   ; FIXME: do we need this one?
+.endif
     
 
 playback_stream:
@@ -337,9 +353,9 @@ playback_stream:
     ; --- init addresses ---
 
     stz FRAME_INDEX
+    
+.if(DO_SLOW)
     stz BLOCK_NUMBER
-    
-    
     ldx BLOCK_NUMBER
     
     lda block_ram_bank, x
@@ -350,6 +366,16 @@ playback_stream:
     sta FRAME_ADDRESS
     lda block_frame_address_high, x
     sta FRAME_ADDRESS+1
+.else
+    lda #1
+    sta CURRENT_RAM_BANK
+    sta RAM_BANK
+    
+    lda #$00
+    sta FRAME_ADDRESS
+    lda #$A0
+    sta FRAME_ADDRESS+1
+.endif
     
 next_frame:
 
@@ -370,10 +396,12 @@ done_clearing_buffer:
     sta RAM_BANK  ; We reload the ram bank because the divide_fast (inside draw_polygon) changes it
 
 ; FIXME!
-    cmp #19
+.if(0)
+    cmp #19   ; = $13
     bne move_on
     stp
 move_on:
+.endif
     
     
     ldy #0
@@ -420,15 +448,13 @@ done_drawing_frame:
     cpx #$FD
     beq end_of_video
     
-    cpx #$FE    ; block/ram bank marker
+    cpx #$FE    ; block marker
     bne increment_frame_address
-
-
 
     ; We go to the next 64kB blockram bank + address
     
-    inc BLOCK_NUMBER
-    
+.if(DO_SLOW)
+    inc BLOCK_NUMBER    
     ldx BLOCK_NUMBER
     
     lda block_ram_bank, x
@@ -438,6 +464,14 @@ done_drawing_frame:
     sta FRAME_ADDRESS
     lda block_frame_address_high, x
     sta FRAME_ADDRESS+1
+.else
+    inc CURRENT_RAM_BANK
+
+    lda #$00
+    sta FRAME_ADDRESS
+    lda #$A0
+    sta FRAME_ADDRESS+1
+.endif
 
     bra frame_address_set
 
@@ -452,6 +486,12 @@ increment_frame_address:
     ; We check if we are passed the 7kB barrier, if so we switch to the next bank and move the frame address back 7kB
     cmp #$BC
     bcc frame_address_set
+    
+    ; We check if we are at the last of 9 RAM banks, if so, we do not move to the next RAM bank yet (we are expecting a block marker soon)
+    
+    ldx CURRENT_RAM_BANK
+    lda is_last_bank_of_nine, x
+    bne frame_address_set
     
     inc CURRENT_RAM_BANK
     
@@ -940,6 +980,16 @@ copy_next_scene_bank:
     ldy #0
 copy_next_1kb_chunk:
 
+.if(0)
+    lda TARGET_BANK_NUMBER
+    cmp #9
+    bne keep_on_going
+    
+    stp
+
+keep_on_going:
+.endif
+
     jsr copy_1kb_from_vram_to_ram_bank
     
     clc
@@ -955,7 +1005,8 @@ copy_next_1kb_chunk:
     stz CHUNK_CODE_OFFSET
     inc TARGET_BANK_NUMBER
     
-; QUESTION: wont this go wrong if you just happen to end on the border of two ram banks?
+    ; Note: Effectively we put 64 kB in 9 RAM banks. The FIRST bank has 8 kB! The other eight have 7kB. 
+    ; Total: 8kB + 8*7kB = 64kB. So one original 64 kB block FITS perfectly!
 
     ; We need to NOT increment the CHUNK_ADDRESS_OFFSET when we just incremented the RAM bank, since we want this 1kB to be used AGAIN
     bra chunk_address_offset_is_ok
@@ -974,7 +1025,7 @@ chunk_address_offset_is_ok:
 
     inc SOURCE_BANK_NUMBER
     lda SOURCE_BANK_NUMBER
-
+   
 ; FIXME: WHAT DO WE COUNT? TARGET OR SOURCE?
 ; FIXME: which amount? +1?
     cmp #$51+$80
