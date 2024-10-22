@@ -154,6 +154,9 @@ PALETTE_MASK =               $7A ; 7B
 RED =                        $7C
 
 
+; FIXME!
+DO_SLOW = 1
+
 
 ; === RAM addresses ===
 
@@ -227,6 +230,8 @@ start:
     sta VERA_DC_VIDEO
 
     jsr generate_clear_256_bytes_code
+    
+.if(!DO_SLOW)
     jsr generate_copy_ram_bank_to_vram_code
     
     ; Generating code for copying 1kB to each specific chunk of the target RAM bank
@@ -247,10 +252,13 @@ generate_next_copy_vram_to_ram_bank_code_chunk:
     
     cmp #$20   ; We go from $A000 to $C000 (= $2000 address offset)
     bne generate_next_copy_vram_to_ram_bank_code_chunk
+.endif
     
     
 ; FIXME! (OLD!)
-;    jsr generate_copy_buffer_to_ram_bank_code
+.if(DO_SLOW)
+    jsr generate_copy_buffer_to_ram_bank_code
+.endif
     
     ; This clears (almost) the entire VRAM and sets it to the BACKGROUND_COLOR
     jsr clear_vram_fast_4_bytes
@@ -273,8 +281,11 @@ generate_next_copy_vram_to_ram_bank_code_chunk:
     lda #20
     sta VERA_DC_BORDER
     
+.if(DO_SLOW)    
+    jsr copy_scene_data_into_7kb_chunks_old
+.else
     jsr copy_scene_data_into_7kb_chunks
-; FIXME: REMOVE!    jsr copy_scene_data_into_7kb_chunks_old
+.endif
     
     ; Setting the border color
 ; FIXME!
