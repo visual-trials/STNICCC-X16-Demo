@@ -286,7 +286,7 @@ tmp_loop:
     
     ; Since we convert 8kB chunks into 7kB chunks, every 64kB block border is now offset
     ; Here we say were these 64kB blocks start (address+bank). 
-    ; Note that a 64kB takes 9 ram banks + 1024 bytes (9*7+1 = 64 kB)
+    ; Note that a 64kB takes 9 ram banks + 1024 bytes (9 * 7kB + 1kB = 64 kB)
     
 block_frame_address_high:
     .byte $A0, $A4, $A8, $AC, $B0, $B4, $B8, $BC,  $A4, $A8, $AC
