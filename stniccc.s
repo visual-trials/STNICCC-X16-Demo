@@ -318,7 +318,7 @@ tmp_loop:
 block_frame_address_high:
     .byte $A0, $A4, $A8, $AC, $B0, $B4, $B8, $BC,  $A4, $A8, $AC
 block_ram_bank:
-    .byte   1,  11,  19,  28,  37,  46,  55,  64,   74,  83,  92
+    .byte   1,  10,  19,  28,  37,  46,  55,  64,   74,  83,  92
     
 
 playback_stream:
