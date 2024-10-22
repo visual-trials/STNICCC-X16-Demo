@@ -512,7 +512,7 @@ def fx_sim_draw_polygon(draw_buffer, line_color_index, polygon_index, vertex_ind
             return None
 
 # FIXME!            
-        return None
+#        return None
             
         current_y_position += nr_of_lines_to_draw
         
@@ -856,7 +856,8 @@ def run():
 # FIXME!
 # FIXME!
     #frame_nr = 125
-    increment_frame_by = 0
+#    increment_frame_by = 0
+
 
     
     screen.fill(background_color)
@@ -935,7 +936,7 @@ def run():
                 pygame.draw.polygon(frame_buffer, color_index, unscaled_polygon_vertices, 0)
 
 # FIXME!
-            break
+#            break
 
 
         # Blitting the frame_buffer to the (scaled) screen
