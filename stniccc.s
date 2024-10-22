@@ -95,9 +95,12 @@ STORE_ADDRESS              = $33 ; 34
 VRAM_ADDRESS               = $35 ; 36 ; 37
 BUFFER_LOAD_ADDRESS        = $38 ; 39
 
+CHUNK_CODE_OFFSET          = $3A
+CHUNK_ADDRESS_OFFSET       = $3B
+
 ; FIXME: these are TEMPORARY variables and should be REMOVE or REPLACED!
-VSYNC_FRAME_COUNTER        = $3A ; 3B
-DEFAULT_IRQ_VECTOR         = $3C ; 3D
+VSYNC_FRAME_COUNTER        = $3C ; 3D
+DEFAULT_IRQ_VECTOR         = $3E ; 3F
 
 ; Used by the slow polygon filler
 FILL_LENGTH_LOW            = $42
@@ -171,9 +174,10 @@ CLEAR_256_BYTES_CODE     = $5000   ; takes 00C1 bytes (256 bytes to clear = 64 *
 VERTICES_X               = $50D0   ; 7 bytes (max 7 vertices with an x and y coordinate)
 VERTICES_Y               = $50D7   ; 7 bytes (max 7 vertices with an x and y coordinate)
 
+; FIXME: REMOVE/REPLACE!
 COPY_BUFFER_TO_RAM_BANK_CODE = $5100   ; takes 64 * 6 + 1 = 385 bytes = $181 bytes
-; FIXME: determine size!
-COPY_RAM_BANK_TO_BUFFER_CODE = $5300   ; takes ... bytes
+
+COPY_RAM_BANK_TO_VRAM_CODE   = $5300   ; takes 64 * 6 + 1 = 385 bytes = $181 bytes
 
 ; FIXME: these are not FILLED atm!
 LEFT_NIBBLE_TO_RIGHT_NIBBLE = $5E00   ; 256 bytes NOTE: this contains very little data, but we have a left nibble (4 highest bits) so we need 256 bytes
@@ -181,13 +185,20 @@ LEFT_NIBBLE_TO_BOTH_NIBBLES = $5E01   ;
 
 SCENE_DATA_BUFFER_ADDRESS   = $6000   ; 8*1024 = 8192 (= $2000) bytes
 
+COPY_VRAM_TO_RAM_BANK_CODE  = $8000   ; 8 * 256 bytes (actually only $C1 needed per chunk) = $800 bytes
+
 ; Original scene data
 ORIG_SCENE_DATA_RAM_ADDRESS = $A000
 ORIG_SCENE_DATA_RAM_BANK    = $80    ; Note: we are currently loading the raw scene data into the 1MB point of Banked RAM
 
 ; Scene data in 7kB chunks (overlapping 1kB for each RAM bank)
+; FIXME! REMOVE!
+; FIXME! REMOVE!
+; FIXME! REMOVE!
 SCENE_DATA_RAM_ADDRESS      = $A000
 SCENE_DATA_RAM_BANK         = $1 
+
+SCENE_DATA_VRAM_ADDRESS     = $10000
 
 
 ; === Other constants ===
@@ -216,7 +227,30 @@ start:
     sta VERA_DC_VIDEO
 
     jsr generate_clear_256_bytes_code
-    jsr generate_copy_buffer_to_ram_bank_code
+    jsr generate_copy_ram_bank_to_vram_code
+    
+    ; Generating code for copying 1kB to each specific chunk of the target RAM bank
+    stz CHUNK_CODE_OFFSET
+    stz CHUNK_ADDRESS_OFFSET
+generate_next_copy_vram_to_ram_bank_code_chunk:
+    jsr generate_copy_vram_to_ram_bank_code
+    
+    clc
+    lda CHUNK_CODE_OFFSET
+    adc #$01
+    sta CHUNK_CODE_OFFSET
+    
+    clc
+    lda CHUNK_ADDRESS_OFFSET
+    adc #$04
+    sta CHUNK_ADDRESS_OFFSET
+    
+    cmp #$20   ; We go from $A000 to $C000 (= $2000 address offset)
+    bne generate_next_copy_vram_to_ram_bank_code_chunk
+    
+    
+; FIXME! (OLD!)
+;    jsr generate_copy_buffer_to_ram_bank_code
     
     ; This clears (almost) the entire VRAM and sets it to the BACKGROUND_COLOR
     jsr clear_vram_fast_4_bytes
@@ -230,15 +264,9 @@ start:
     jsr setup_vera_for_layer0_bitmap_general
     
     
-    ; We start with showing buffer 1 while filling buffer 0
-    jsr setup_vera_for_layer0_bitmap_buffer_1
-    stz BUFFER_NR
-
-    
     jsr load_scene_data_into_banked_ram
     
-    
-    ; Setting the border color to black
+    ; Setting the border color
 ; FIXME!
     lda #%00000000           ; DCSEL=0, ADDRSEL=0
     sta VERA_CTRL
@@ -246,13 +274,20 @@ start:
     sta VERA_DC_BORDER
     
     jsr copy_scene_data_into_7kb_chunks
+; FIXME: REMOVE!    jsr copy_scene_data_into_7kb_chunks_old
     
-    ; Setting the border color to black
+    ; Setting the border color
 ; FIXME!
     lda #%00000000           ; DCSEL=0, ADDRSEL=0
     sta VERA_CTRL
     lda #230
     sta VERA_DC_BORDER
+
+
+    ; We start with showing buffer 1 while filling buffer 0
+    jsr setup_vera_for_layer0_bitmap_buffer_1
+    stz BUFFER_NR
+
 
     
 ;    jsr init_playback_screen
@@ -283,7 +318,7 @@ tmp_loop:
 block_frame_address_high:
     .byte $A0, $A4, $A8, $AC, $B0, $B4, $B8, $BC,  $A4, $A8, $AC
 block_ram_bank:
-    .byte   1,  10,  19,  28,  37,  46,  55,  64,   74,  83,  92
+    .byte   1,  11,  19,  28,  37,  46,  55,  64,   74,  83,  92
     
 
 playback_stream:
@@ -322,6 +357,13 @@ done_clearing_buffer:
 
     lda CURRENT_RAM_BANK
     sta RAM_BANK  ; We reload the ram bank because the divide_fast (inside draw_polygon) changes it
+
+; FIXME!
+    cmp #19
+    bne move_on
+    stp
+move_on:
+    
     
     ldy #0
     lda (FRAME_ADDRESS), y    ; frame flags
@@ -842,54 +884,112 @@ scene_data_loaded:
     rts
 
 
-    ; New IDEA: use VRAM as buffer
-    ;
-    ; - Upload 8kB RAM Bank (with a step of 128) -> 8kB consecutive bytes in VRAM
-    ;   * Set x to 0
-    ;   * Set VRAM address to $100xx, increment to 128
-    ;   * Do this 128 times:
-    ;     * Loop/generated code (64 copies):
-    ;       * lda $A000, x
-    ;       * sta DATA0
-    ;       * lda $A040, x
-    ;       * sta DATA0
-    ;       ...
-    ;       * lda $BFC0, x
-    ;       * sta DATA0
-    ;     * Increment x
-    ; - Download 1kB parts into 9 slots of Banked RAM
-    ;   - copying 9 times 1kB!
-    ;   - 8 different targets ($A0, $A4, ..., $BC):
-    ;   * Set x to 0
-    ;   * set y to 1kB slot in the *source*
-    ;   * Set VRAM address to $1yyxx, increment to 16
-    ;   * Do this 16 times:
-    ;     * Loop/generated code (64 copies):
-    ;       * lda DATA0
-    ;       * sta $A000, x
-    ;       * lda DATA0
-    ;       * sta $A008, x
-    ;       ...
-    ;       * lda DATA0
-    ;       * sta $A3F8, x
-    ;     * Increment x
-
-
+; This uses 8kB of VRAM as a buffer (to copy to and from)
 copy_scene_data_into_7kb_chunks:
 
     lda #ORIG_SCENE_DATA_RAM_BANK
     sta SOURCE_BANK_NUMBER
-    lda #SCENE_DATA_RAM_BANK
-    sta TARGET_BANK_NUMBER
     
-
     lda #<ORIG_SCENE_DATA_RAM_ADDRESS
     sta LOAD_ADDRESS
     lda #>ORIG_SCENE_DATA_RAM_ADDRESS
     sta LOAD_ADDRESS+1
     
-
+    lda #SCENE_DATA_RAM_BANK
+    sta TARGET_BANK_NUMBER
+ 
+; FIXME: REMOVE! 
+;    lda #<SCENE_DATA_RAM_ADDRESS
+;    sta STORE_ADDRESS
+;    lda #>SCENE_DATA_RAM_ADDRESS
+;    sta STORE_ADDRESS+1
+    
+    stz CHUNK_CODE_OFFSET
+    
 copy_next_scene_bank:
+
+; FIXME!
+;    lda CHUNK_CODE_OFFSET
+;    ldy TARGET_BANK_NUMBER
+;stp
+    
+    lda #%10000001      ; setting bit 16 of vram address to 1, setting auto-increment value to 128 (= 1000b)
+    sta VERA_ADDR_BANK
+    
+    jsr copy_8kb_to_vram_buffer
+    
+    ; We copy 9 chunks of 1kB size into the appropiate RAM banks
+
+    lda #%01100001      ; setting bit 16 of vram address to 1, setting auto-increment value to 32 (= 0110b)
+    sta VERA_ADDR_BANK
+    
+    ; The VRAM address (which will be determined by CHUNK_ADDRESS_OFFSET) is set to 0 when we start a new ram bank
+    stz CHUNK_ADDRESS_OFFSET
+    
+    ldy #0
+copy_next_1kb_chunk:
+
+    jsr copy_1kb_from_vram_to_ram_bank
+    
+    clc
+    lda CHUNK_CODE_OFFSET
+    adc #$01
+    sta CHUNK_CODE_OFFSET
+    
+    cmp #8
+    bne chunk_code_offset_is_ok
+    
+    ; We are at the end of the RAM bank, so we reset the CHUNK_CODE_OFFSET and increment the RAM bank
+    ; Note that CHUNK_CODE_OFFSET (implicitly) represents the target address in the RAM Bank
+    stz CHUNK_CODE_OFFSET
+    inc TARGET_BANK_NUMBER
+    
+; QUESTION: wont this go wrong if you just happen to end on the border of two ram banks?
+
+    ; We need to NOT increment the CHUNK_ADDRESS_OFFSET when we just incremented the RAM bank, since we want this 1kB to be used AGAIN
+    bra chunk_address_offset_is_ok
+    
+chunk_code_offset_is_ok:
+    
+    clc
+    lda CHUNK_ADDRESS_OFFSET
+    adc #$04
+    sta CHUNK_ADDRESS_OFFSET
+       
+chunk_address_offset_is_ok:
+    iny
+    cpy #9
+    bne copy_next_1kb_chunk
+
+    inc SOURCE_BANK_NUMBER
+    lda SOURCE_BANK_NUMBER
+
+; FIXME: WHAT DO WE COUNT? TARGET OR SOURCE?
+; FIXME: which amount? +1?
+    cmp #$51+$80
+    bne copy_next_scene_bank
+    
+
+    rts
+    
+    
+
+copy_scene_data_into_7kb_chunks_old:
+
+    lda #ORIG_SCENE_DATA_RAM_BANK
+    sta SOURCE_BANK_NUMBER
+
+    lda #<ORIG_SCENE_DATA_RAM_ADDRESS
+    sta LOAD_ADDRESS
+    lda #>ORIG_SCENE_DATA_RAM_ADDRESS
+    sta LOAD_ADDRESS+1
+
+
+    lda #SCENE_DATA_RAM_BANK
+    sta TARGET_BANK_NUMBER
+    
+
+copy_next_scene_bank_old:
 
     lda #<SCENE_DATA_BUFFER_ADDRESS
     sta STORE_ADDRESS
@@ -942,10 +1042,60 @@ load_address_is_reverted:
 ; FIXME: WHAT DO WE COUNT? TARGET OR SOURCE?
 ; FIXME: which amount? +1?
     cmp #$51+$80
-    bne copy_next_scene_bank
+    bne copy_next_scene_bank_old
 
     rts
     
+    
+    
+copy_8kb_to_vram_buffer:
+
+    lda SOURCE_BANK_NUMBER
+    sta RAM_BANK
+    
+    ldx #0
+copy_ram_bank_to_vram_next_64:
+    stx VERA_ADDR_LOW               ; Note: we are ignoring the lower part/byte of SCENE_DATA_VRAM_ADDRESS
+    lda #>SCENE_DATA_VRAM_ADDRESS
+    sta VERA_ADDR_HIGH
+
+    jsr COPY_RAM_BANK_TO_VRAM_CODE   ; copies 64 bytes
+    inx
+    cpx #128       ; we copy 64 * 128 bytes = 8kB
+    bne copy_ram_bank_to_vram_next_64
+
+    rts
+    
+    
+    
+copy_1kb_from_vram_to_ram_bank:
+
+    lda TARGET_BANK_NUMBER
+    sta RAM_BANK
+
+    clc
+    lda #>COPY_VRAM_TO_RAM_BANK_CODE
+    adc CHUNK_CODE_OFFSET
+    sta patch_copy_vram_to_ram_bank_jmp+2  
+
+    ldx #0
+copy_vram_to_ram_bank_32:
+    stx VERA_ADDR_LOW               ; Note: we are ignoring the lower part/byte of SCENE_DATA_VRAM_ADDRESS
+    
+    clc
+    lda #>SCENE_DATA_VRAM_ADDRESS
+    adc CHUNK_ADDRESS_OFFSET
+    sta VERA_ADDR_HIGH
+       
+patch_copy_vram_to_ram_bank_jmp:
+    jsr COPY_VRAM_TO_RAM_BANK_CODE   ; copies 32 bytes
+    inx
+    cpx #32       ; we copy 32 * 32 bytes = 1kB
+    bne copy_vram_to_ram_bank_32
+
+    rts
+
+
     
 copy_1kb_to_buffer_slow:
 
@@ -985,6 +1135,9 @@ load_address_is_ok:
     rts
     
     
+; FIXME! REMOVE!
+; FIXME! REMOVE!
+; FIXME! REMOVE!
 copy_8kb_buffer_to_ram_bank:
 
     lda TARGET_BANK_NUMBER
@@ -1359,6 +1512,158 @@ clear_next_256_bytes:
     rts
     
     
+generate_copy_ram_bank_to_vram_code:
+
+    ; We generate 64 times a byte-copy like this (with x ranging from 0->127):
+    ;     lda $A000, x
+    ;     sta DATA0
+    ;     lda $A080, x
+    ;     sta DATA0
+    ;     lda $A100, x
+    ;     sta DATA0
+    ;       ...
+    ;     lda $BF80, x
+    ;     sta DATA0
+    ;     rts
+
+    lda #<COPY_RAM_BANK_TO_VRAM_CODE
+    sta CODE_ADDRESS
+    lda #>COPY_RAM_BANK_TO_VRAM_CODE
+    sta CODE_ADDRESS+1
+    
+    lda #<ORIG_SCENE_DATA_RAM_ADDRESS
+    sta LOAD_ADDRESS
+    lda #>ORIG_SCENE_DATA_RAM_ADDRESS
+    sta LOAD_ADDRESS+1
+    
+
+    ldy #0                 ; generated code byte counter
+
+    ; -- We generate 64 copy (lda/sta) instructions --
+    
+    ldx #64                ; counts nr of copy instructions
+
+next_copy_to_vram_instruction:
+
+    ; -- lda $A000, x 
+    lda #$BD               ; lda ...., x
+    jsr add_code_byte
+
+    lda LOAD_ADDRESS
+    jsr add_code_byte
+    
+    lda LOAD_ADDRESS+1
+    jsr add_code_byte
+    
+    ; -- sta VERA_DATA0 ($9F23)
+    lda #$8D               ; sta ....
+    jsr add_code_byte
+
+    lda #$23               ; $23
+    jsr add_code_byte
+    
+    lda #$9F               ; $9F
+    jsr add_code_byte
+    
+    clc
+    lda LOAD_ADDRESS
+    adc #$80
+    sta LOAD_ADDRESS
+    lda LOAD_ADDRESS+1
+    adc #0
+    sta LOAD_ADDRESS+1
+    
+    dex
+    bne next_copy_to_vram_instruction
+
+    ; -- rts --
+    lda #$60
+    jsr add_code_byte
+
+    rts
+    
+    
+    
+generate_copy_vram_to_ram_bank_code:
+
+    ; We generate 32 times a byte-copy like this (with x ranging from 0->31):
+    ;     lda DATA0
+    ;     sta $A000, x
+    ;     lda DATA0
+    ;     sta $A020, x
+    ;     lda DATA0
+    ;     sta $A040, x
+    ;     ...
+    ;     lda DATA0
+    ;     sta $A3E0, x
+    ;     rts
+
+    lda #<COPY_VRAM_TO_RAM_BANK_CODE
+    sta CODE_ADDRESS
+    clc
+    lda #>COPY_VRAM_TO_RAM_BANK_CODE
+    adc CHUNK_CODE_OFFSET
+    sta CODE_ADDRESS+1
+    
+    lda #<SCENE_DATA_RAM_ADDRESS
+    sta STORE_ADDRESS
+    clc
+    lda #>SCENE_DATA_RAM_ADDRESS
+    adc CHUNK_ADDRESS_OFFSET
+    sta STORE_ADDRESS+1
+    
+
+    ldy #0                 ; generated code byte counter
+
+    ; -- We generate 32 copy (lda/sta) instructions --
+    
+    ldx #32                ; counts nr of copy instructions
+
+next_copy_from_vram_instruction:
+
+    ; -- lda VERA_DATA0 ($9F23)
+    lda #$AD               ; lda ....
+    jsr add_code_byte
+
+    lda #$23               ; $23
+    jsr add_code_byte
+    
+    lda #$9F               ; $9F
+    jsr add_code_byte
+    
+
+    ; -- sta $A000, x 
+    lda #$9D               ; sta ...., x
+    jsr add_code_byte
+
+    lda STORE_ADDRESS
+    jsr add_code_byte
+    
+    lda STORE_ADDRESS+1
+    jsr add_code_byte
+
+
+    clc
+    lda STORE_ADDRESS
+    adc #$20            ; we add 32 each time
+    sta STORE_ADDRESS
+    lda STORE_ADDRESS+1
+    adc #0
+    sta STORE_ADDRESS+1
+    
+    dex
+    bne next_copy_from_vram_instruction
+
+    ; -- rts --
+    lda #$60
+    jsr add_code_byte
+
+    rts
+    
+    
+; FIXME! REMOVE!
+; FIXME! REMOVE!
+; FIXME! REMOVE!
 generate_copy_buffer_to_ram_bank_code:
     
     ; We generate 64 times a byte-copy like this (with x ranging from 0->127):
