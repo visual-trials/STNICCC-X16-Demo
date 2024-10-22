@@ -167,15 +167,9 @@ Y_TO_ADDRESS_LOW_1       = $4D00
 Y_TO_ADDRESS_HIGH_1      = $4E00
 Y_TO_ADDRESS_BANK_1      = $4F00
 
-; FIXME!
-; FIXME!
-; FIXME!
-CLEAR_256_BYTES_CODE     = $5000   ; takes up to 00F0+rts (256 bytes to clear = 80 * stz = 80 * 3 bytes)
-; FIXME!
-; FIXME!
-; FIXME!
-VERTICES_X               = $50F0   ; 7 bytes (max 7 vertices with an x and y coordinate)
-VERTICES_Y               = $50F7   ; 7 bytes (max 7 vertices with an x and y coordinate)
+CLEAR_256_BYTES_CODE     = $5000   ; takes 00C1 bytes (256 bytes to clear = 64 * stz = 64 * 3 bytes = 192 bytes + 1 byte (rts) = 193 bytes = $C1 bytes)
+VERTICES_X               = $50D0   ; 7 bytes (max 7 vertices with an x and y coordinate)
+VERTICES_Y               = $50D7   ; 7 bytes (max 7 vertices with an x and y coordinate)
 
 LEFT_NIBBLE_TO_RIGHT_NIBBLE = $5100   ; 256 bytes NOTE: this contains very little data, butwe have a left nibble (4 highest bits) so we need 256 bytes
 LEFT_NIBBLE_TO_BOTH_NIBBLES = $5101   ;
@@ -236,13 +230,16 @@ start:
 
     
     jsr load_scene_data_into_banked_ram
+    
+    
+    ; Setting the border color to black
+; FIXME!
+    lda #%00000000           ; DCSEL=0, ADDRSEL=0
+    sta VERA_CTRL
+    lda #20
+    sta VERA_DC_BORDER
+    
     jsr copy_scene_data_into_7kb_chunks
-    
-    
-;    jsr init_playback_screen
-
-    ; Clear buffer $00
-    ; Clear buffer $01
     
     ; Setting the border color to black
 ; FIXME!
@@ -251,6 +248,12 @@ start:
     lda #230
     sta VERA_DC_BORDER
 
+    
+;    jsr init_playback_screen
+
+    ; Clear buffer $00
+    ; Clear buffer $01
+    
 
     ; FIXME: this vsync-handling should probably be REPLACED!
 ;    jsr backup_default_irq_handler
