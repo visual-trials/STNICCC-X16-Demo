@@ -156,9 +156,6 @@ PALETTE_MASK =               $7A ; 7B
 RED =                        $7C
 
 
-; FIXME!
-DO_SLOW = 0
-
 
 ; === RAM addresses ===
 
@@ -233,7 +230,6 @@ start:
 
     jsr generate_clear_256_bytes_code
     
-.if(!DO_SLOW)
     jsr generate_copy_ram_bank_to_vram_code
     
     ; Generating code for copying 1kB to each specific chunk of the target RAM bank
@@ -254,13 +250,7 @@ generate_next_copy_vram_to_ram_bank_code_chunk:
     
     cmp #$20   ; We go from $A000 to $C000 (= $2000 address offset)
     bne generate_next_copy_vram_to_ram_bank_code_chunk
-.endif
     
-    
-; FIXME! (OLD!)
-.if(DO_SLOW)
-    jsr generate_copy_buffer_to_ram_bank_code
-.endif
     
     ; This clears (almost) the entire VRAM and sets it to the BACKGROUND_COLOR
     jsr clear_vram_fast_4_bytes
@@ -275,32 +265,17 @@ generate_next_copy_vram_to_ram_bank_code_chunk:
     
     
     jsr load_scene_data_into_banked_ram
-    
-    ; Setting the border color
-; FIXME!
-    lda #%00000000           ; DCSEL=0, ADDRSEL=0
-    sta VERA_CTRL
-    lda #20
-    sta VERA_DC_BORDER
-    
-.if(DO_SLOW)    
-    jsr copy_scene_data_into_7kb_chunks_old
-.else
     jsr copy_scene_data_into_7kb_chunks
-.endif
     
     ; Setting the border color
-; FIXME!
     lda #%00000000           ; DCSEL=0, ADDRSEL=0
     sta VERA_CTRL
-    lda #230
+    lda #0
     sta VERA_DC_BORDER
-
 
     ; We start with showing buffer 1 while filling buffer 0
     jsr setup_vera_for_layer0_bitmap_buffer_1
     stz BUFFER_NR
-
 
     
 ;    jsr init_playback_screen
@@ -325,28 +300,7 @@ tmp_loop:
     
     
     ; Since we convert 8kB chunks into 7kB chunks, every 64kB block border is now offset
-    ; Here we say were these 64kB blocks start (address+bank). 
     ; Note that a 64kB takes 9 ram banks + 1024 bytes (9 * 7kB + 1kB = 64 kB)
-    
-.if(DO_SLOW)
-block_frame_address_high:
-    .byte $A0, $A4, $A8, $AC, $B0, $B4, $B8, $BC,  $A4, $A8, $AC
-block_ram_bank:
-    .byte   1,  10,  19,  28,  37,  46,  55,  64,   74,  83,  92
-.else
-is_last_bank_of_nine:
-    .byte 0
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 1-9
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 10-18
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 19-27
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 28-36
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 37-45
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 46-54
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 55-63
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 64-72
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 73-81
-    .byte 0, 0, 0, 0, 0, 0, 0, 0, 1  ; 82-90   ; FIXME: do we need this one?
-.endif
     
 
 playback_stream:
@@ -355,19 +309,6 @@ playback_stream:
 
     stz FRAME_INDEX
     
-.if(DO_SLOW)
-    stz BLOCK_NUMBER
-    ldx BLOCK_NUMBER
-    
-    lda block_ram_bank, x
-    sta CURRENT_RAM_BANK
-    sta RAM_BANK
-    
-    lda #0
-    sta FRAME_ADDRESS
-    lda block_frame_address_high, x
-    sta FRAME_ADDRESS+1
-.else
     lda #1
     sta CURRENT_RAM_BANK
     sta RAM_BANK
@@ -377,7 +318,6 @@ playback_stream:
     sta FRAME_ADDRESS
     lda #$A0
     sta FRAME_ADDRESS+1
-.endif
     
 next_frame:
 
@@ -397,14 +337,6 @@ done_clearing_buffer:
     lda CURRENT_RAM_BANK
     sta RAM_BANK  ; We reload the ram bank because the divide_fast (inside draw_polygon) changes it
 
-; FIXME!
-.if(0)
-    cmp #19   ; = $13
-    bne move_on
-    stp
-move_on:
-.endif
-    
     
     ldy #0
     lda (FRAME_ADDRESS), y    ; frame flags
@@ -455,18 +387,6 @@ done_drawing_frame:
 
     ; We go to the next 64kB blockram bank + address
     
-.if(DO_SLOW)
-    inc BLOCK_NUMBER    
-    ldx BLOCK_NUMBER
-    
-    lda block_ram_bank, x
-    sta CURRENT_RAM_BANK
-    
-    lda #0
-    sta FRAME_ADDRESS
-    lda block_frame_address_high, x
-    sta FRAME_ADDRESS+1
-.else
     inc CURRENT_RAM_BANK
     stz BANK_INDEX_IN_BLOCK  ; We are at the beginning of a 64 kB block, so our index is 0
 
@@ -474,7 +394,6 @@ done_drawing_frame:
     sta FRAME_ADDRESS
     lda #$A0
     sta FRAME_ADDRESS+1
-.endif
 
     bra frame_address_set
 
@@ -953,21 +872,10 @@ copy_scene_data_into_7kb_chunks:
     lda #SCENE_DATA_RAM_BANK
     sta TARGET_BANK_NUMBER
  
-; FIXME: REMOVE! 
-;    lda #<SCENE_DATA_RAM_ADDRESS
-;    sta STORE_ADDRESS
-;    lda #>SCENE_DATA_RAM_ADDRESS
-;    sta STORE_ADDRESS+1
-    
     stz CHUNK_CODE_OFFSET
     
 copy_next_scene_bank:
 
-; FIXME!
-;    lda CHUNK_CODE_OFFSET
-;    ldy TARGET_BANK_NUMBER
-;stp
-    
     lda #%10000001      ; setting bit 16 of vram address to 1, setting auto-increment value to 128 (= 1000b)
     sta VERA_ADDR_BANK
     
@@ -983,16 +891,6 @@ copy_next_scene_bank:
     
     ldy #0
 copy_next_1kb_chunk:
-
-.if(0)
-    lda TARGET_BANK_NUMBER
-    cmp #9
-    bne keep_on_going
-    
-    stp
-
-keep_on_going:
-.endif
 
     jsr copy_1kb_from_vram_to_ram_bank
     
@@ -1035,80 +933,6 @@ chunk_address_offset_is_ok:
     cmp #$51+$80
     bne copy_next_scene_bank
     
-
-    rts
-    
-    
-
-copy_scene_data_into_7kb_chunks_old:
-
-    lda #ORIG_SCENE_DATA_RAM_BANK
-    sta SOURCE_BANK_NUMBER
-
-    lda #<ORIG_SCENE_DATA_RAM_ADDRESS
-    sta LOAD_ADDRESS
-    lda #>ORIG_SCENE_DATA_RAM_ADDRESS
-    sta LOAD_ADDRESS+1
-
-
-    lda #SCENE_DATA_RAM_BANK
-    sta TARGET_BANK_NUMBER
-    
-
-copy_next_scene_bank_old:
-
-    lda #<SCENE_DATA_BUFFER_ADDRESS
-    sta STORE_ADDRESS
-    lda #>SCENE_DATA_BUFFER_ADDRESS
-    sta STORE_ADDRESS+1
-
-; FIXME: replace with a FAST one!
-    jsr copy_1kb_to_buffer_slow
-    jsr copy_1kb_to_buffer_slow
-    jsr copy_1kb_to_buffer_slow
-    jsr copy_1kb_to_buffer_slow
-    jsr copy_1kb_to_buffer_slow
-    jsr copy_1kb_to_buffer_slow
-    jsr copy_1kb_to_buffer_slow
-    jsr copy_1kb_to_buffer_slow
-    
-    ; Note: we revert the increment of the load address if this is the 8th bank we copied (so the first 1kb of the next target bank will also contain the same 1kb of data)
-    
-    ; We subtract $0400 to the load address (= 1024 bytes)
-    dec LOAD_ADDRESS+1
-    dec LOAD_ADDRESS+1
-    dec LOAD_ADDRESS+1
-    dec LOAD_ADDRESS+1
-    
-    ; if we reach $9C00, we need to reset to $BC00 and decrement the SOURCE_BANK_NUMBER
-    lda LOAD_ADDRESS+1
-    cmp #$9C
-    bne load_address_is_reverted
-    
-    lda #$BC
-    sta LOAD_ADDRESS+1
-    dec SOURCE_BANK_NUMBER
-
-load_address_is_reverted:
-    
-
-    lda #<SCENE_DATA_BUFFER_ADDRESS
-    sta BUFFER_LOAD_ADDRESS
-    lda #>SCENE_DATA_BUFFER_ADDRESS
-    sta BUFFER_LOAD_ADDRESS+1
-    
-    lda #<SCENE_DATA_RAM_ADDRESS
-    sta STORE_ADDRESS
-    lda #>SCENE_DATA_RAM_ADDRESS
-    sta STORE_ADDRESS+1
-    
-    jsr copy_8kb_buffer_to_ram_bank
-
-    lda SOURCE_BANK_NUMBER
-; FIXME: WHAT DO WE COUNT? TARGET OR SOURCE?
-; FIXME: which amount? +1?
-    cmp #$51+$80
-    bne copy_next_scene_bank_old
 
     rts
     
@@ -1158,65 +982,6 @@ patch_copy_vram_to_ram_bank_jmp:
     inx
     cpx #32       ; we copy 32 * 32 bytes = 1kB
     bne copy_vram_to_ram_bank_32
-
-    rts
-
-
-    
-copy_1kb_to_buffer_slow:
-
-    lda SOURCE_BANK_NUMBER
-    sta RAM_BANK
-
-    ldx #4  ; (4*256 = 1024 bytes)
-copy_256_bytes_to_buffer:
-    ldy #0
-    
-copy_1_byte_to_buffer:
-    lda (LOAD_ADDRESS),y
-    sta (STORE_ADDRESS),y
-    iny
-    bne copy_1_byte_to_buffer
-    
-    ; We add $0100 to the load address (= 256 bytes)
-    inc LOAD_ADDRESS+1
-    
-    ; if we reach $C000, we need to reset to $A000 and increment the SOURCE_BANK_NUMBER
-    lda LOAD_ADDRESS+1
-    cmp #$C0
-    bne load_address_is_ok
-    
-    lda #$A0
-    sta LOAD_ADDRESS+1
-    inc SOURCE_BANK_NUMBER
-
-load_address_is_ok:
-
-    ; We add $0100 to the store address (= 256 bytes)
-    inc STORE_ADDRESS+1
-
-    dex
-    bne copy_256_bytes_to_buffer
-
-    rts
-    
-    
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-copy_8kb_buffer_to_ram_bank:
-
-    lda TARGET_BANK_NUMBER
-    sta RAM_BANK
-    
-    ldx #0
-copy_buffer_to_ram_bank_next_64:
-    jsr COPY_BUFFER_TO_RAM_BANK_CODE   ; copies 64 bytes
-    inx
-    cpx #128       ; we copy 64 * 128 bytes = 8kB
-    bne copy_buffer_to_ram_bank_next_64
-
-    inc TARGET_BANK_NUMBER
 
     rts
 
@@ -1726,95 +1491,6 @@ next_copy_from_vram_instruction:
 
     rts
     
-    
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-; FIXME! REMOVE!
-generate_copy_buffer_to_ram_bank_code:
-    
-    ; We generate 64 times a byte-copy like this (with x ranging from 0->127):
-    ;    lda $6000, x
-    ;    sta $A000, x
-    ;    lda $6080, x
-    ;    sta $A080, x
-    ;    lda $6100, x
-    ;    sta $A100, x
-    ;    lda $6180, x
-    ;    sta $A180, x
-    ;    ...
-    ;    rts
-    
-    lda #<COPY_BUFFER_TO_RAM_BANK_CODE
-    sta CODE_ADDRESS
-    lda #>COPY_BUFFER_TO_RAM_BANK_CODE
-    sta CODE_ADDRESS+1
-    
-    lda #<SCENE_DATA_BUFFER_ADDRESS
-    sta LOAD_ADDRESS
-    lda #>SCENE_DATA_BUFFER_ADDRESS
-    sta LOAD_ADDRESS+1
-    
-    lda #<SCENE_DATA_RAM_ADDRESS
-    sta STORE_ADDRESS
-    lda #>SCENE_DATA_RAM_ADDRESS
-    sta STORE_ADDRESS+1
-    
-    
-    ldy #0                 ; generated code byte counter
-
-    ; -- We generate 64 copy (lda/sta) instructions --
-    
-    ldx #64                ; counts nr of copy instructions
-
-next_copy_to_ram_bank_instruction:
-
-    ; -- lda $6000, x 
-    lda #$BD               ; lda ...., x
-    jsr add_code_byte
-
-    lda LOAD_ADDRESS
-    jsr add_code_byte
-    
-    lda LOAD_ADDRESS+1
-    jsr add_code_byte
-    
-    ; -- sta $A000, x 
-    lda #$9D               ; sta ...., x
-    jsr add_code_byte
-
-    lda STORE_ADDRESS
-    jsr add_code_byte
-    
-    lda STORE_ADDRESS+1
-    jsr add_code_byte
-    
-    clc
-    lda LOAD_ADDRESS
-    adc #$80
-    sta LOAD_ADDRESS
-    lda LOAD_ADDRESS+1
-    adc #0
-    sta LOAD_ADDRESS+1
-
-    clc
-    lda STORE_ADDRESS
-    adc #$80
-    sta STORE_ADDRESS
-    lda STORE_ADDRESS+1
-    adc #0
-    sta STORE_ADDRESS+1
-    
-    dex
-    bne next_copy_to_ram_bank_instruction
-
-    ; -- rts --
-    lda #$60
-    jsr add_code_byte
-
-
-    rts
-
-
     
 generate_clear_256_bytes_code:
 
