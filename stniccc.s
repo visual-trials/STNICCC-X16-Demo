@@ -150,6 +150,7 @@ CURRENT_POLYGON_ADDRESS =    $74 ; 75
 BYTES_SO_FAR =               $76
 FRAME_FLAGS =                $77
 FRAME_INDEX =                $78
+BANK_INDEX_IN_BLOCK =        $79
 
 PALETTE_MASK =               $7A ; 7B
 RED =                        $7C
@@ -370,6 +371,7 @@ playback_stream:
     lda #1
     sta CURRENT_RAM_BANK
     sta RAM_BANK
+    stz BANK_INDEX_IN_BLOCK
     
     lda #$00
     sta FRAME_ADDRESS
@@ -466,6 +468,7 @@ done_drawing_frame:
     sta FRAME_ADDRESS+1
 .else
     inc CURRENT_RAM_BANK
+    stz BANK_INDEX_IN_BLOCK  ; We are at the beginning of a 64 kB block, so our index is 0
 
     lda #$00
     sta FRAME_ADDRESS
@@ -487,13 +490,14 @@ increment_frame_address:
     cmp #$BC
     bcc frame_address_set
     
-    ; We check if we are at the last of 9 RAM banks, if so, we do not move to the next RAM bank yet (we are expecting a block marker soon)
+    ; We check if we are at the last of 9 RAM banks, if so, we do *not* move to the next RAM bank yet (we are expecting a block marker soon)
     
-    ldx CURRENT_RAM_BANK
-    lda is_last_bank_of_nine, x
-    bne frame_address_set
+    lda BANK_INDEX_IN_BLOCK
+    cmp #8
+    beq frame_address_set
     
     inc CURRENT_RAM_BANK
+    inc BANK_INDEX_IN_BLOCK
     
     sec
     lda FRAME_ADDRESS+1
